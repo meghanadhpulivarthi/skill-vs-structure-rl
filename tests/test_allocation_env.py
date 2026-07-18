@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 from src.synthetic_market import generate_market
 from src.allocation_env import AllocationEnv
@@ -47,3 +48,9 @@ def test_episode_terminates_at_end_of_series():
         done = term or trunc
         steps += 1
     assert steps == 300 - 20  # n_steps - window
+
+
+def test_unknown_base_name_raises_valueerror():
+    market = generate_market(n_assets=4, n_steps=300, seed=5, signal_strength=0.8)
+    with pytest.raises(ValueError):
+        AllocationEnv(market, base_name="not_a_real_base", window=20, cost_bps=10.0)
