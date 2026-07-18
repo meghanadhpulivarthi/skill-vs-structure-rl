@@ -28,3 +28,10 @@ def test_turnover_full_switch():
     w = np.array([[1.0, 0.0], [0.0, 1.0]])
     # 0.5 * (|0-1| + |1-0|) = 1.0 on the single transition
     assert abs(metrics.turnover(w) - 1.0) < 1e-9
+
+
+def test_sortino_denominator_uses_full_sample():
+    r = np.array([0.10, -0.05])
+    ratio = metrics.sortino(r, periods_per_year=1)
+    expected = r.mean() / np.sqrt(np.mean(np.minimum(r, 0.0) ** 2))
+    assert abs(ratio - expected) < 1e-9

@@ -5,6 +5,9 @@ from scipy import stats
 
 def expected_shortfall(returns: np.ndarray, alpha: float = 0.99) -> float:
     returns = np.asarray(returns, dtype=float)
+    if returns.size == 0:
+        print("expected_shortfall: empty returns; returning nan")
+        return float("nan")
     tail_prob = 1.0 - alpha
     cutoff = max(1, int(np.floor(tail_prob * returns.size)))
     worst = np.sort(returns)[:cutoff]
@@ -44,17 +47,18 @@ def sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float:
 
 def sortino(returns: np.ndarray, periods_per_year: int = 252) -> float:
     returns = np.asarray(returns, dtype=float)
-    downside = returns[returns < 0.0]
-    if downside.size == 0:
-        print("sortino: no downside returns; returning inf")
-        return float("inf")
+    downside = np.minimum(returns, 0.0)
     downside_std = np.sqrt(np.mean(downside ** 2))
+    if downside_std == 0.0:
+        print("sortino: no downside deviation; returning inf")
+        return float("inf")
     return float(returns.mean() / downside_std * np.sqrt(periods_per_year))
 
 
 def turnover(weights: np.ndarray) -> float:
     weights = np.asarray(weights, dtype=float)
     if weights.shape[0] < 2:
+        print("turnover: fewer than 2 timesteps; returning 0.0")
         return 0.0
     step_turnover = 0.5 * np.abs(np.diff(weights, axis=0)).sum(axis=1)
     return float(step_turnover.mean())
