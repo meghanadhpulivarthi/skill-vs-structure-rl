@@ -11,6 +11,13 @@ from gymnasium import spaces
 from src.simplex import project_to_simplex
 from src.base_policies import BASE_POLICIES
 
+# Config — edit these directly
+# Finite bound on the residual tilt action. SB3 requires finite Box bounds; the
+# value is intentionally wide because the tilt is projected onto the simplex
+# (base + action -> project_to_simplex), so any value >~1 can already reach a
+# simplex vertex. A finite bound does not constrain the reachable weights.
+RESIDUAL_ACTION_BOUND = 10.0
+
 
 class AllocationEnv(gym.Env):
     metadata = {"render_modes": []}
@@ -28,7 +35,7 @@ class AllocationEnv(gym.Env):
 
         obs_dim = window * self.n_assets + self.n_assets + 1
         self.observation_space = spaces.Box(-np.inf, np.inf, (obs_dim,), dtype=np.float32)
-        self.action_space = spaces.Box(-np.inf, np.inf, (self.n_assets,), dtype=np.float32)
+        self.action_space = spaces.Box(-RESIDUAL_ACTION_BOUND, RESIDUAL_ACTION_BOUND, (self.n_assets,), dtype=np.float32)
 
         self._t = None
         self._prev_weights = None
