@@ -1,28 +1,27 @@
-"""Gymnasium env: PPO learns a residual tilt on a structural-null base policy.
+"""Gymnasium env: PPO learns a scalar DE-RISKING GATE on a structural-null base.
 
 Structure-baselined reward is the methodological core (spec §5.3): the agent is
 rewarded ONLY for the log-growth it adds over the base on the same market path,
-net of its extra turnover cost. With no timeable signal, positive expected
-reward is unattainable, so the learned tilt should collapse toward the base.
+net of its extra turnover cost.
+
+Action design (spec §5.2, revised 2026-07-18): the agent outputs a scalar gate
+g in [0, 1] and the executed portfolio blends the base with a safe allocation:
+    w = (1 - g) * base + g * safe
+g = 0 reproduces the base exactly (zero skill by construction); the agent only
+raises g when timed de-risking genuinely pays. This replaced an unconstrained
+N-dim tilt that over-traded and never learned the do-nothing floor.
 """
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-from src.simplex import project_to_simplex
 from src.base_policies import BASE_POLICIES
-
-# Config — edit these directly
-# Finite bound on the residual tilt action. SB3 requires finite Box bounds; the
-# value is intentionally wide because the tilt is projected onto the simplex
-# (base + action -> project_to_simplex), so any value >~1 can already reach a
-# simplex vertex. A finite bound does not constrain the reachable weights.
-RESIDUAL_ACTION_BOUND = 10.0
 
 
 class AllocationEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, market: dict, base_name: str, window: int = 20, cost_bps: float = 10.0):
+    def __init__(self, market: dict, base_name: str, window: int = 20,
+                 cost_bps: float = 10.0, safe_asset_index: int = None):
         super().__init__()
         if base_name not in BASE_POLICIES:
             raise ValueError(f"unknown base_name {base_name!r}; expected one of {list(BASE_POLICIES)}")
@@ -33,9 +32,20 @@ class AllocationEnv(gym.Env):
         self.window = window
         self.cost_rate = cost_bps * 1e-4
 
+        # Safe allocation the gate de-risks toward. Default: the last asset.
+        # (In the risky+safe world that is the safe-haven asset.)
+        if safe_asset_index is None:
+            safe_asset_index = self.n_assets - 1
+        if not 0 <= safe_asset_index < self.n_assets:
+            raise ValueError(f"safe_asset_index {safe_asset_index} out of range for {self.n_assets} assets")
+        self.safe_asset_index = safe_asset_index
+        self.safe_weights = np.zeros(self.n_assets)
+        self.safe_weights[safe_asset_index] = 1.0
+
         obs_dim = window * self.n_assets + self.n_assets + 1
         self.observation_space = spaces.Box(-np.inf, np.inf, (obs_dim,), dtype=np.float32)
-        self.action_space = spaces.Box(-RESIDUAL_ACTION_BOUND, RESIDUAL_ACTION_BOUND, (self.n_assets,), dtype=np.float32)
+        # Action is the scalar de-risking gate g in [0, 1].
+        self.action_space = spaces.Box(0.0, 1.0, (1,), dtype=np.float32)
 
         self._t = None
         self._prev_weights = None
@@ -65,7 +75,9 @@ class AllocationEnv(gym.Env):
     def step(self, action):
         win = self.returns[self._t - self.window:self._t]
         base_weights = self.base_policy(win)
-        weights = project_to_simplex(base_weights + np.asarray(action, dtype=float))
+        gate = float(np.clip(np.asarray(action, dtype=float).reshape(-1)[0], 0.0, 1.0))
+        # Blend of two simplex points is itself on the simplex — no projection needed.
+        weights = (1.0 - gate) * base_weights + gate * self.safe_weights
 
         asset_returns = self.returns[self._t]
         agent_log = self._net_log_return(weights, self._prev_weights, asset_returns)
@@ -75,6 +87,7 @@ class AllocationEnv(gym.Env):
         self.last_info = {
             "weights": weights,
             "base_weights": base_weights,
+            "gate": gate,
             "port_return": float(weights @ asset_returns),
             "base_return": float(base_weights @ asset_returns),
         }

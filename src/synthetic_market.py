@@ -58,3 +58,51 @@ def generate_market(
             returns[t] = rng.multivariate_normal(np.full(n_assets, CRISIS_DRIFT), crisis_cov)
 
     return {"returns": returns, "signal": signal, "regime": regime}
+
+
+# Config — risky+safe world (asset 0 = risky, asset 1 = safe haven)
+# Used for the minimal RQ2 validation: the gate can de-risk from risky into safe.
+RISKY_CALM_DRIFT = 0.0006
+RISKY_CALM_VOL = 0.008
+RISKY_CRISIS_DRIFT = -0.004
+RISKY_CRISIS_VOL = 0.030
+SAFE_DRIFT = 0.00005   # safe haven: tiny positive drift, both regimes
+SAFE_VOL = 0.001       # and very low volatility, no crash
+
+
+def generate_risky_safe_market(
+    n_steps: int,
+    seed: int,
+    signal_strength: float,
+    crisis_persistence: float = 0.9,
+    calm_persistence: float = 0.98,
+) -> dict:
+    """Minimal 2-asset world: asset 0 risky (crashes in crisis), asset 1 safe.
+
+    Same regime/signal machinery as generate_market. The gate de-risks from the
+    risky asset toward the safe asset; timing it with `signal` is the only source
+    of skill, so signal_strength=0 makes skill impossible (the RQ2 null).
+    """
+    rng = np.random.default_rng(seed)
+
+    regime = np.zeros(n_steps, dtype=int)
+    for t in range(1, n_steps):
+        if regime[t - 1] == 0:
+            regime[t] = 0 if rng.random() < calm_persistence else 1
+        else:
+            regime[t] = 1 if rng.random() < crisis_persistence else 0
+
+    noise = rng.random(n_steps)
+    next_is_crisis = np.zeros(n_steps)
+    next_is_crisis[:-1] = (regime[1:] == 1).astype(float)
+    signal = signal_strength * next_is_crisis + (1.0 - signal_strength) * noise
+
+    returns = np.zeros((n_steps, 2))
+    for t in range(n_steps):
+        if regime[t] == 0:
+            returns[t, 0] = rng.normal(RISKY_CALM_DRIFT, RISKY_CALM_VOL)
+        else:
+            returns[t, 0] = rng.normal(RISKY_CRISIS_DRIFT, RISKY_CRISIS_VOL)
+        returns[t, 1] = rng.normal(SAFE_DRIFT, SAFE_VOL)
+
+    return {"returns": returns, "signal": signal, "regime": regime}
