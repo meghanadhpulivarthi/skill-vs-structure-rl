@@ -1,5 +1,5 @@
 import numpy as np
-from src.interventions import feature_groups, rollout_observations, make_gate_fn, freeze_group, permute_group, causal_effect
+from src.interventions import feature_groups, rollout_observations, make_gate_fn, freeze_group, permute_group, causal_effect, inject_vol_shock, flip_signal
 
 
 def test_feature_groups_partition_the_obs_vector():
@@ -66,3 +66,26 @@ def test_causal_effect_rejects_unknown_mode():
     import pytest
     with pytest.raises(ValueError):
         causal_effect(lambda o: np.zeros(len(o)), np.zeros((5, 43)), [0], "scramble")
+
+
+def test_inject_vol_shock_is_local_and_nonmutating():
+    from src.synthetic_market import generate_risky_safe_market
+    market = generate_risky_safe_market(300, seed=2, signal_strength=0.95)
+    original_returns = np.array(market["returns"])   # snapshot
+    shocked = inject_vol_shock(market, t0=100, width=5, multiplier=5.0, risky_index=0)
+    assert np.allclose(market["returns"], original_returns)          # input untouched
+    assert np.allclose(shocked["returns"][100:105, 0],
+                       original_returns[100:105, 0] * 5.0)            # intended slice scaled
+    assert np.allclose(shocked["returns"][:100], original_returns[:100])  # elsewhere unchanged
+    assert np.allclose(shocked["returns"][:, 1], original_returns[:, 1])  # safe asset unchanged
+    assert np.allclose(shocked["signal"], market["signal"])          # signal preserved
+
+
+def test_flip_signal_sets_one_step_without_mutating():
+    from src.synthetic_market import generate_risky_safe_market
+    market = generate_risky_safe_market(300, seed=3, signal_strength=0.95)
+    original_signal = np.array(market["signal"])
+    flipped = flip_signal(market, t0=150, value=1.0)
+    assert np.allclose(market["signal"], original_signal)   # input untouched
+    assert flipped["signal"][150] == 1.0
+    assert np.allclose(np.delete(flipped["signal"], 150), np.delete(original_signal, 150))

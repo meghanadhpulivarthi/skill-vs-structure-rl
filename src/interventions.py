@@ -81,3 +81,20 @@ def causal_effect(gate_fn, observations, indices, mode: str, seed: int = 0) -> f
         raise ValueError(f"unknown mode {mode!r}; expected 'freeze' or 'permute'")
     ablated = gate_fn(ablated_obs)
     return float(np.mean(np.abs(np.asarray(baseline) - np.asarray(ablated))))
+
+
+def inject_vol_shock(market: dict, t0: int, width: int, multiplier: float,
+                     risky_index: int = 0) -> dict:
+    """Transiently amplify the risky asset's return magnitude over [t0, t0+width)
+    (a volatility spike). Returns a NEW market dict; the input is not mutated."""
+    returns = np.array(market["returns"], dtype=float)   # copy
+    returns[t0:t0 + width, risky_index] *= multiplier
+    return {**market, "returns": returns}
+
+
+def flip_signal(market: dict, t0: int, value: float) -> dict:
+    """Force the leading signal to `value` at step t0, holding the rest fixed, to
+    read the gate's response to the signal alone. Returns a NEW market dict."""
+    signal = np.array(market["signal"], dtype=float)     # copy
+    signal[t0] = value
+    return {**market, "signal": signal}
