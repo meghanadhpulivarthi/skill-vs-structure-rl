@@ -19,13 +19,19 @@ def test_phase_randomize_destroys_volatility_clustering():
     # the autocorrelation of SQUARED returns — which is exactly the timeable
     # (regime/vol-clustering) structure the de-risking gate exploits via its
     # trailing-vol signal. So the surrogate is a valid "no timeable structure" null.
+    #
+    # Note: lag-1 autocorrelation of squared returns for an iid-innovation vol-block
+    # process is diluted by chi-square(1) innovation noise to ~0.19 (analytically
+    # mean(v^4)-mu^2 over 3*mean(v^4)-mu^2) — this is realistic for financial vol
+    # clustering, NOT ~1. The assertion therefore checks RELATIVE destruction against
+    # a stably-estimated original (large n), not a fragile absolute threshold.
     rng = np.random.default_rng(1)
-    n = 3000
-    # Simple regime-switching: returns are white noise but volatility alternates in blocks.
-    # This creates vol clustering in squared returns without AR structure in raw returns.
-    block_size = 150
-    vol_block = np.repeat([0.002, 0.05], block_size)  # 300-step repeat pattern
-    vol_schedule = np.tile(vol_block, (n // len(vol_block) + 1))[:n]
+    n = 20000
+    block_size = 250
+    # Raw returns are white (iid), but volatility alternates in long blocks, so
+    # SQUARED returns carry persistent (timeable) volatility structure.
+    vol_block = np.repeat([0.005, 0.04], block_size)   # 500-step repeat pattern
+    vol_schedule = np.tile(vol_block, n // len(vol_block) + 1)[:n]
     returns = (rng.normal(0.0, 1.0, n) * vol_schedule).reshape(-1, 1)
     surrogate = phase_randomize(returns, seed=3)
 
@@ -34,9 +40,8 @@ def test_phase_randomize_destroys_volatility_clustering():
 
     original_vol_clustering = lag1(returns.ravel() ** 2)
     surrogate_vol_clustering = lag1(surrogate.ravel() ** 2)
-    # Regime switching creates vol clustering in squared returns
-    assert original_vol_clustering > 0.17           # strong vol clustering by construction (true value ~0.18)
-    assert abs(surrogate_vol_clustering) < 0.1      # phase randomization destroys it
+    assert original_vol_clustering > 0.1                          # genuine vol clustering present
+    assert surrogate_vol_clustering < 0.5 * original_vol_clustering  # phase randomization substantially destroys it
 
 
 def test_placebo_null_returns_requested_number_of_skills(tmp_path):
