@@ -37,3 +37,7 @@ def test_roll_weights_charges_cost_and_shapes():
     net = roll_weights(equal_weight_base, returns, window=20, cost_bps=10.0)
     assert net.shape == (100,)                        # T - window
     assert np.isfinite(net).all()
+    # A zero-cost run must dominate the costed run everywhere: cost only subtracts.
+    net_no_cost = roll_weights(equal_weight_base, returns, window=20, cost_bps=0.0)
+    assert np.all(net <= net_no_cost + 1e-12)          # cost never increases a return
+    assert net_no_cost.sum() >= net.sum()              # cost reduces or maintains sum (equal weight has near-zero turnover)

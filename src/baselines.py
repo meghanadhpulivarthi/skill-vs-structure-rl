@@ -75,5 +75,5 @@ def roll_weights(weight_fn, returns: np.ndarray, window: int = 20, cost_bps: flo
         turnover = 0.5 * np.abs(weights - prev_weights).sum()
         gross = float(weights @ returns[t])
         net_returns.append(gross - cost_rate * turnover)
-        prev_weights = weights
+        prev_weights = weights   # turnover measured vs chosen weights; intra-period drift not tracked (deliberate simplification)
     return np.asarray(net_returns, dtype=float)
