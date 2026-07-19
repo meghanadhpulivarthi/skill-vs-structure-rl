@@ -2,7 +2,40 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — Tilt RQ2 judged NET-OF-NULL; the tilt agent over-churns signal-off (supersedes the entry below)
+
+**Finding (robust, LSF, 5–8 seeds):** the expressive residual-tilt agent CANNOT reach a
+clean do-nothing floor. With NO signal it still tilts and LOSES to costs:
+`skill_off ≈ −6e-5 to −8e-5` (not ~0), and more training makes it worse (it overfits the
+observation features to noise). This is the milder echo of the original unbounded-N-dim-tilt
+failure — the tanh bound + `max_tilt` cap reduced but did not eliminate the over-churn.
+`max_tilt=0.20` over-churns harder (`skill_off=−8.5e-5`) than `0.15` (`≈−7e-5`); **0.15 is the
+validated cap** (the earlier "clean −9.5e-6 at 3 seeds" was a lucky draw — see below).
+
+**Decision (user-approved): judge the tilt RQ2 gate NET-OF-NULL**, consistent with the
+real-data placebo-net-of-null method already used for RQ1. Two criteria:
+1. `skill_net = skill_on − skill_off > 5e-5` — signal-on skill NET of the signal-off churn
+   null is clearly positive (skill appears only when timeable structure exists);
+2. `skill_off < 5e-5` (one-sided) — signal-off must not manufacture POSITIVE skill; a
+   NEGATIVE skill_off is fine, it is the null that gets netted out.
+The old two-sided `|skill_off| < 5e-5` criterion was correct for the SCALAR GATE (whose
+do-nothing floor is free at exactly 0) but wrong for the tilt model (which cannot reach it).
+This is a methodology alignment, not threshold-weakening (thresholds/floor unchanged; Rule 9).
+
+**Validated (LSF, max_tilt=0.15, 5 seeds, 150k):** skill_off=−6.4e-5, skill_on=+1.40e-4,
+**skill_net=+2.04e-4 = 4.09× the 5e-5 floor**; `pass_net=True`, `pass_off_not_positive=True`.
+Robust (net-of-null cancels common-mode seed variance). The tilt skill measure is VALIDATED:
+skill appears net-of-null only when the signal exists. Tooling: `scripts/rq2_tilt_parallel.py`
+(+ `rq2_tilt.sh`) runs this on LSF in ~4 min (parallel across seeds×strengths).
+
+**Implication for real-data RQ1 (tilt):** report skill NET of the placebo null (as already
+designed) — the null absorbs the tilt agent's over-churn, so the verdict stays interpretable.
+
 ## 2026-07-19 — Tilt RQ2 calibration: max_tilt=0.15 passes on multi-regime market
+
+**SUPERSEDED by the entry above** — the single 3-seed `skill_off=-9.5e-6` below was a lucky
+draw; the robust (multi-seed) signal-off skill is ~−6 to −8e-5, so the gate is judged
+net-of-null, not two-sided. Kept for the record.
 
 **Chosen `max_tilt`: 0.15** (the brief's initial value — no sweep needed).
 

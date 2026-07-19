@@ -28,7 +28,7 @@ SAFE_TICKER_PREFERENCE = ("IEF", "TLT")   # de-risking sleeve, resolved by NAME
 PLACEBO_PHASE_BASE = 1000                 # surrogate phase-randomization seed = base + draw
 PLACEBO_TRAIN_BASE = 500                  # placebo PPO training seed = base + draw
 ACTION_MODE = "gate"    # set to "tilt" to sweep the expressive residual-tilt agent
-MAX_TILT = 0.15         # tilt-mode cap (ignored in gate mode); calibrate via the tilt RQ2
+MAX_TILT = 0.15         # tilt-mode cap (ignored in gate mode); validated via tilt RQ2 (0.20 over-churns)
 RUN_DIR = (Path(__file__).resolve().parent.parent / "outputs"
            / ("rq1_sweep_tilt" if ACTION_MODE == "tilt" else "rq1_sweep"))
 
