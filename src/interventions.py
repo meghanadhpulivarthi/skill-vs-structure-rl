@@ -49,3 +49,35 @@ def make_gate_fn(model):
         actions, _ = model.predict(obs, deterministic=True)
         return np.clip(np.asarray(actions, dtype=float).reshape(-1), 0.0, 1.0)
     return gate_fn
+
+
+def freeze_group(observations: np.ndarray, indices: list) -> np.ndarray:
+    """Replace the group's columns with their per-column mean over the stack —
+    removes that group's variation while leaving its scale roughly intact."""
+    out = np.array(observations, dtype=np.float32)   # copy
+    out[:, indices] = observations[:, indices].mean(axis=0, keepdims=True)
+    return out
+
+
+def permute_group(observations: np.ndarray, indices: list, rng: np.random.Generator) -> np.ndarray:
+    """Row-permute the group's columns (shared permutation), breaking their
+    temporal alignment with the target while preserving each column's marginal."""
+    out = np.array(observations, dtype=np.float32)   # copy
+    order = rng.permutation(observations.shape[0])
+    out[:, indices] = observations[order][:, indices]
+    return out
+
+
+def causal_effect(gate_fn, observations, indices, mode: str, seed: int = 0) -> float:
+    """Mean absolute change in the gate decision when `indices` are ablated.
+    Larger => the agent's de-risking depends more on those features."""
+    observations = np.asarray(observations, dtype=np.float32)
+    baseline = gate_fn(observations)
+    if mode == "freeze":
+        ablated_obs = freeze_group(observations, indices)
+    elif mode == "permute":
+        ablated_obs = permute_group(observations, indices, np.random.default_rng(seed))
+    else:
+        raise ValueError(f"unknown mode {mode!r}; expected 'freeze' or 'permute'")
+    ablated = gate_fn(ablated_obs)
+    return float(np.mean(np.abs(np.asarray(baseline) - np.asarray(ablated))))
