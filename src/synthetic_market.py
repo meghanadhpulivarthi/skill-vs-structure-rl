@@ -106,3 +106,47 @@ def generate_risky_safe_market(
         returns[t, 1] = rng.normal(SAFE_DRIFT, SAFE_VOL)
 
     return {"returns": returns, "signal": signal, "regime": regime}
+
+
+def generate_multi_regime_market(
+    n_risky: int,
+    n_safe: int,
+    n_steps: int,
+    seed: int,
+    signal_strength: float,
+    crisis_persistence: float = 0.9,
+    calm_persistence: float = 0.98,
+) -> dict:
+    """Multi-asset risky+safe world (risky assets first, then safe).
+
+    Generalizes generate_risky_safe_market to n_risky crisis-hurt assets (cross-
+    correlated, so diversification within the risky block fails in a crisis) and
+    n_safe calm safe-haven assets. The signal predicts the next crisis, so an
+    expressive tilt agent can time a tilt toward the safe block — the cross-asset
+    skill the tilt RQ2 tests. signal_strength=0 removes the information (the null).
+    """
+    rng = np.random.default_rng(seed)
+
+    regime = np.zeros(n_steps, dtype=int)
+    for t in range(1, n_steps):
+        if regime[t - 1] == 0:
+            regime[t] = 0 if rng.random() < calm_persistence else 1
+        else:
+            regime[t] = 1 if rng.random() < crisis_persistence else 0
+
+    noise = rng.random(n_steps)
+    next_is_crisis = np.zeros(n_steps)
+    next_is_crisis[:-1] = (regime[1:] == 1).astype(float)
+    signal = signal_strength * next_is_crisis + (1.0 - signal_strength) * noise
+
+    calm_cov = _regime_cov(n_risky, RISKY_CALM_VOL, CALM_CORR)
+    crisis_cov = _regime_cov(n_risky, RISKY_CRISIS_VOL, CRISIS_CORR)
+    returns = np.zeros((n_steps, n_risky + n_safe))
+    for t in range(n_steps):
+        if regime[t] == 0:
+            returns[t, :n_risky] = rng.multivariate_normal(np.full(n_risky, RISKY_CALM_DRIFT), calm_cov)
+        else:
+            returns[t, :n_risky] = rng.multivariate_normal(np.full(n_risky, RISKY_CRISIS_DRIFT), crisis_cov)
+        returns[t, n_risky:] = rng.normal(SAFE_DRIFT, SAFE_VOL, size=n_safe)
+
+    return {"returns": returns, "signal": signal, "regime": regime}

@@ -1,5 +1,5 @@
 import numpy as np
-from src.synthetic_market import generate_market, generate_risky_safe_market
+from src.synthetic_market import generate_market, generate_risky_safe_market, generate_multi_regime_market
 
 
 def test_shapes_and_keys():
@@ -58,5 +58,31 @@ def test_risky_safe_signal_toggle():
     corr_on = np.corrcoef(on["signal"][:-1], on["regime"][1:])[0, 1]
     assert corr_on > 0.2
     off = generate_risky_safe_market(n_steps=20_000, seed=3, signal_strength=0.0)
+    corr_off = abs(np.corrcoef(off["signal"][:-1], off["regime"][1:])[0, 1])
+    assert corr_off < 0.05
+
+
+def test_multi_regime_shapes_and_safe_block_is_low_vol():
+    m = generate_multi_regime_market(n_risky=3, n_safe=2, n_steps=20_000, seed=1, signal_strength=0.9)
+    assert m["returns"].shape == (20_000, 5)
+    risky_vol = m["returns"][:, :3].std()
+    safe_vol = m["returns"][:, 3:].std()
+    assert safe_vol < 0.3 * risky_vol
+
+
+def test_multi_regime_crisis_hurts_risky_not_safe():
+    m = generate_multi_regime_market(n_risky=3, n_safe=2, n_steps=20_000, seed=2, signal_strength=0.9)
+    crisis = m["regime"] == 1
+    risky_mean = m["returns"][:, :3].mean(axis=1)
+    safe_mean = m["returns"][:, 3:].mean(axis=1)
+    assert risky_mean[crisis].mean() < risky_mean[~crisis].mean()
+    assert abs(safe_mean[crisis].mean() - safe_mean[~crisis].mean()) < 0.001
+
+
+def test_multi_regime_signal_toggle():
+    on = generate_multi_regime_market(n_risky=3, n_safe=2, n_steps=20_000, seed=3, signal_strength=0.9)
+    corr_on = np.corrcoef(on["signal"][:-1], on["regime"][1:])[0, 1]
+    assert corr_on > 0.2
+    off = generate_multi_regime_market(n_risky=3, n_safe=2, n_steps=20_000, seed=3, signal_strength=0.0)
     corr_off = abs(np.corrcoef(off["signal"][:-1], off["regime"][1:])[0, 1])
     assert corr_off < 0.05
