@@ -5,3 +5,5 @@ outputs/*
 !outputs/.gitkeep
 .pytest_cache/
 .superpowers/
+lit_review/
+references/
