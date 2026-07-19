@@ -39,6 +39,19 @@ def _top(group_importance: dict) -> str:
     return max(group_importance, key=group_importance.get)
 
 
+def gate_response_to_vol_shock(model, market: dict, config: dict, t0: int,
+                              width: int, multiplier: float) -> dict:
+    """Gate trajectory on the original vs. vol-shocked market, aligned on the same
+    decision timeline. Evidence the agent is causally responsive to volatility."""
+    from src.interventions import inject_vol_shock  # local import keeps the top clean
+    gate_fn = make_gate_fn(model)
+    baseline_obs = rollout_observations(model, market, config)
+    shocked_market = inject_vol_shock(market, t0=t0, width=width, multiplier=multiplier)
+    shocked_obs = rollout_observations(model, shocked_market, config)
+    return {"baseline": [float(x) for x in gate_fn(baseline_obs)],
+            "shocked": [float(x) for x in gate_fn(shocked_obs)]}
+
+
 def run_probe(gate_fn, gate_mean_fn, observations, groups, seed: int = 0) -> dict:
     """Pure verdict computation over one agent's replayed decisions. No training,
     no IO. See the module plan for the returned schema."""
@@ -106,6 +119,8 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
         print(f"seed={seed}: causal_top={verdict['top_group']['causal_freeze']} "
               f"saliency_top={verdict['top_group']['saliency']} "
               f"shap_top={verdict['top_group']['shap']}", flush=True)
+        if seed == 0:
+            first_model, first_eval = model, eval_market
         per_seed.append(verdict)
 
     # Aggregate: fraction of seeds where each method ranks `signal` top, and mean
@@ -126,6 +141,25 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
     out_dir = (Path(__file__).resolve().parent.parent / "outputs"
                / f"{now.strftime('%Y-%m-%d_%H-%M-%S')}_rq3-faithfulness")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Legibility figure: gate response to a vol shock on the first agent (spec §7).
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        curves = gate_response_to_vol_shock(first_model, first_eval, config,
+                                            t0=config["n_steps"] // 2, width=5,
+                                            multiplier=6.0)
+        plt.figure()
+        plt.plot(curves["baseline"], label="baseline", linewidth=0.8)
+        plt.plot(curves["shocked"], label="vol shock", linewidth=0.8)
+        plt.xlabel("decision step"); plt.ylabel("de-risking gate g"); plt.legend()
+        plt.title("Gate response to an injected volatility shock")
+        plt.savefig(out_dir / "gate_response_vol_shock.png", dpi=120, bbox_inches="tight")
+        plt.close()
+        print(f"wrote {out_dir / 'gate_response_vol_shock.png'}")
+    except Exception as exc:
+        print(f"WARNING: gate-response figure failed (non-fatal): {exc}")
     with open(out_dir / "config.json", "w") as f:
         json.dump({"config": config, "n_seeds": n_seeds}, f, indent=2)
     with open(out_dir / "results.json", "w") as f:
