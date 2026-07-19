@@ -1,5 +1,6 @@
 # tests/test_walk_forward.py
 import numpy as np
+import pytest
 from src.walk_forward import make_folds, walk_forward_gate
 
 
@@ -29,3 +30,15 @@ def test_walk_forward_runs_and_stitches(tmp_path):
     assert np.isfinite(result["oos_baselined_reward"]).all()
     assert len(result["fold_mean_skill"]) == len(make_folds(900, 400, 200))
     assert np.isfinite(result["mean_skill"])
+
+
+def test_tilt_mode_requires_initial_train_ge_two_window():
+    # In tilt mode the env warms up over 2*window, so initial_train must be >= 2*window
+    # or the fold's history-prepend would slice a negative index. The guard must fail loud.
+    rng = np.random.default_rng(0)
+    returns = rng.normal(0, 0.01, size=(200, 3))
+    config = {"base_name": "equal_weight", "window": 20, "cost_bps": 10.0,
+              "safe_asset_index": 2, "total_timesteps": 100, "seed": 0,
+              "initial_train": 30, "test_block": 50, "action_mode": "tilt", "max_tilt": 0.15}
+    with pytest.raises(ValueError):
+        walk_forward_gate(returns, config, run_dir=None)
