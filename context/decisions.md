@@ -2,6 +2,18 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — Base policy: §5.1(3) realized as ERC (not diversity-weighted SPT)
+
+Spec §5.1(3) names an "SPT / diversity-weighted (growth-optimal-oriented)" base to span growth.
+Diversity-weighting requires market-cap weights we do not have in the ETF universe.
+More fundamentally, its growth benefit (rebalancing premium) is already spanned by `equal_weight`.
+The unspanned structural channel left open by equal-weight + inverse-vol is **cross-asset correlation**
+and its covariance structure. Risk-parity (ERC: equal-risk-contribution) closes this channel
+transparently and non-learned, making it the right fit for §5.1(3). Implemented as a standard
+fixed-point ERC algorithm on the trailing-window covariance; test data uses positively-correlated
+assets (common-factor + idiosyncratic noise) for algorithm numerical stability with negative
+correlations.
+
 ## 2026-07-18 — RQ2 test threshold recalibrated (5e-5, not the plan's 2e-4)
 
 The Plan-1 RQ2 test (`tests/test_validate_skill.py`) originally specified

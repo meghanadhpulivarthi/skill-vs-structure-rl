@@ -1,5 +1,5 @@
 import numpy as np
-from src.base_policies import equal_weight_base, vol_scaled_base, BASE_POLICIES
+from src.base_policies import equal_weight_base, vol_scaled_base, risk_parity_base, BASE_POLICIES
 
 
 def test_equal_weight_is_uniform_and_on_simplex():
@@ -22,4 +22,27 @@ def test_vol_scaled_downweights_high_vol_asset():
 
 
 def test_registry_contains_both():
-    assert set(BASE_POLICIES.keys()) == {"equal_weight", "vol_scaled"}
+    assert set(BASE_POLICIES.keys()) == {"equal_weight", "vol_scaled", "risk_parity"}
+
+
+def test_risk_parity_registered():
+    from src.base_policies import BASE_POLICIES
+    assert set(BASE_POLICIES.keys()) == {"equal_weight", "vol_scaled", "risk_parity"}
+
+
+def test_risk_parity_downweights_high_vol_and_equalizes_risk():
+    rng = np.random.default_rng(0)
+    # Create positively correlated assets for ERC algorithm stability
+    base_signal = rng.normal(0, 0.01, 200)
+    win = np.column_stack([
+        base_signal + rng.normal(0, 0.001, 200),       # low-vol asset, correlated
+        base_signal * 10 + rng.normal(0, 0.01, 200),   # high-vol asset (10x), correlated
+    ])
+    w = risk_parity_base(win)
+    assert w[0] > w[1]                                   # low-vol asset gets more weight
+    np.testing.assert_allclose(w.sum(), 1.0, atol=1e-8)
+    assert np.all(w >= -1e-9)
+    # Equal risk contribution: w_i * (Sigma w)_i should be ~equal across assets.
+    cov = np.cov(win, rowvar=False)
+    rc = w * (cov @ w)
+    np.testing.assert_allclose(rc[0], rc[1], rtol=0.1)

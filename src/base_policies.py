@@ -24,7 +24,28 @@ def vol_scaled_base(return_window: np.ndarray, target_vol: float = 0.01) -> np.n
     return project_to_simplex(inv_vol / inv_vol.sum())
 
 
+def risk_parity_base(return_window: np.ndarray, max_iter: int = 200, tol: float = 1e-8) -> np.ndarray:
+    # Equal-risk-contribution (ERC) weights: each asset contributes the same share
+    # of portfolio variance. Closes the correlation-structure gap that equal-weight
+    # and inverse-vol leave open (spec §5.1 item 3, realized as ERC). Solved by the
+    # standard fixed-point iteration on the trailing-window covariance.
+    cov = np.cov(return_window, rowvar=False)
+    n_assets = cov.shape[0]
+    weights = np.full(n_assets, 1.0 / n_assets)
+    for _ in range(max_iter):
+        marginal = cov @ weights                       # (Sigma w)_i
+        marginal = np.where(np.abs(marginal) < 1e-16, 1e-16, marginal)
+        updated = 1.0 / marginal                       # target inversely to marginal risk
+        updated = updated / updated.sum()
+        if np.max(np.abs(updated - weights)) < tol:
+            weights = updated
+            break
+        weights = updated
+    return project_to_simplex(weights)
+
+
 BASE_POLICIES = {
     "equal_weight": equal_weight_base,
     "vol_scaled": vol_scaled_base,
+    "risk_parity": risk_parity_base,
 }
