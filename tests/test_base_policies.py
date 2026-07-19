@@ -25,11 +25,6 @@ def test_registry_contains_both():
     assert set(BASE_POLICIES.keys()) == {"equal_weight", "vol_scaled", "risk_parity"}
 
 
-def test_risk_parity_registered():
-    from src.base_policies import BASE_POLICIES
-    assert set(BASE_POLICIES.keys()) == {"equal_weight", "vol_scaled", "risk_parity"}
-
-
 def test_risk_parity_downweights_high_vol_and_equalizes_risk():
     rng = np.random.default_rng(0)
     win = np.column_stack([

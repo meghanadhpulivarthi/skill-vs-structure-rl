@@ -9,10 +9,7 @@ Diversity-weighting requires market-cap weights we do not have in the ETF univer
 More fundamentally, its growth benefit (rebalancing premium) is already spanned by `equal_weight`.
 The unspanned structural channel left open by equal-weight + inverse-vol is **cross-asset correlation**
 and its covariance structure. Risk-parity (ERC: equal-risk-contribution) closes this channel
-transparently and non-learned, making it the right fit for §5.1(3). Implemented as a standard
-fixed-point ERC algorithm on the trailing-window covariance; test data uses positively-correlated
-assets (common-factor + idiosyncratic noise) for algorithm numerical stability with negative
-correlations.
+transparently and non-learned, making it the right fit for §5.1(3). Implemented with a sqrt-damped multiplicative fixed-point iteration that shares the ERC fixed point w_i·(Σw)_i=const with the naive 1/(Σw) map but converges stably for high vol-ratio inputs (the naive map oscillates). The test uses the plan-mandated independent-normals inputs (σ=0.005 vs σ=0.05, seed 0).
 
 ## 2026-07-18 — RQ2 test threshold recalibrated (5e-5, not the plan's 2e-4)
 

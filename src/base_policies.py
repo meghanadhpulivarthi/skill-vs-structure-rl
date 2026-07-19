@@ -39,7 +39,15 @@ def risk_parity_base(return_window: np.ndarray, max_iter: int = 200, tol: float 
     change = np.inf
     for _ in range(max_iter):
         marginal = cov @ weights                       # (Sigma w)_i
-        marginal = np.where(np.abs(marginal) < 1e-16, 1e-16, marginal)
+        if np.any(marginal < 0):
+            # (Sigma w)_i < 0 makes ERC ill-defined (sqrt of a negative). Fall back
+            # loudly to inverse-variance weights (exact ERC when cov is diagonal).
+            print("risk_parity_base: negative marginal risk encountered; "
+                  "falling back to inverse-variance weights")
+            diag = np.diag(cov)
+            inv_var = 1.0 / np.where(diag < 1e-16, 1e-16, diag)
+            return project_to_simplex(inv_var / inv_var.sum())
+        marginal = np.where(marginal < 1e-16, 1e-16, marginal)
         updated = np.sqrt(weights / marginal)          # sqrt damping -> stable ERC fixed point
         updated = updated / updated.sum()
         change = np.max(np.abs(updated - weights))
