@@ -31,3 +31,27 @@ def saliency_importance(gate_mean_fn, observations: np.ndarray) -> np.ndarray:
     gate.sum().backward()
     grads = obs_tensor.grad.detach().numpy()
     return np.mean(np.abs(grads), axis=0)
+
+
+def shap_importance(gate_fn, observations, n_background: int = 40,
+                    n_explain: int = 60, seed: int = 0) -> np.ndarray:
+    """Per-feature KernelSHAP importance: mean |SHAP value| over an explained
+    sample, using a seeded background sub-sample. `gate_fn` is the numpy gate
+    adapter (src.interventions.make_gate_fn)."""
+    import shap
+    observations = np.asarray(observations, dtype=np.float32)
+    rng = np.random.default_rng(seed)
+    n = len(observations)
+    background = observations[rng.choice(n, size=min(n_background, n), replace=False)]
+    explain = observations[rng.choice(n, size=min(n_explain, n), replace=False)]
+    # KernelExplainer uses the legacy global RNG internally; seed it for determinism.
+    np.random.seed(seed)
+    explainer = shap.KernelExplainer(gate_fn, background)
+    values = np.asarray(explainer.shap_values(explain, silent=True))
+    return np.mean(np.abs(values), axis=0)
+
+
+def aggregate_to_groups(importance: np.ndarray, groups: dict) -> dict:
+    """Sum |importance| within each semantic feature group."""
+    importance = np.asarray(importance, dtype=float)
+    return {name: float(np.abs(importance[indices]).sum()) for name, indices in groups.items()}
