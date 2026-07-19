@@ -154,9 +154,23 @@ def run_rq1(config: dict, returns: np.ndarray = None, run_dir=None) -> dict:
 
 
 if __name__ == "__main__":
+    from src.data import load_etf_panel
+
+    panel = load_etf_panel()
+    tickers = panel["tickers"]
+    # Resolve the safe sleeve by NAME: yfinance returns columns alphabetically, so a
+    # hardcoded integer index is fragile. Prefer intermediate Treasuries (IEF), else
+    # long-duration (TLT). Fail loudly if neither survived the universe.
+    if "IEF" in tickers:
+        safe_ticker = "IEF"
+    elif "TLT" in tickers:
+        safe_ticker = "TLT"
+    else:
+        raise ValueError(f"no Treasury safe sleeve (IEF/TLT) in panel tickers {tickers}")
+    safe_index = tickers.index(safe_ticker)
+    print(f"rq1 __main__: safe sleeve = {safe_ticker} at column {safe_index} of {tickers}")
+
     _config = {"base_name": "risk_parity", "window": 20, "cost_bps": 10.0,
-               "safe_asset_index": None, "total_timesteps": 150_000, "seed": 0,
+               "safe_asset_index": safe_index, "total_timesteps": 150_000, "seed": 0,
                "initial_train": 1260, "test_block": 252, "n_placebo": 5}
-    # safe_asset_index None -> AllocationEnv defaults to the last asset; set to the
-    # Treasury ETF's column index once the surviving universe is known (Task 1 print).
-    run_rq1(_config)
+    run_rq1(_config, returns=panel["returns"])
