@@ -159,11 +159,15 @@ def run_rq1(config: dict, returns: np.ndarray = None, run_dir=None) -> dict:
     plt.close()
 
     # Figure 3: gate over time (when does the agent de-risk?).
+    is_tilt = config.get("action_mode", "gate") == "tilt"
+    activity_label = "residual tilt activity (0.5*sum|w-base|)" if is_tilt else "de-risking gate g"
+    activity_title = ("Learned residual tilt activity over time" if is_tilt
+                      else "Learned de-risking gate over time")
     plt.figure()
     plt.plot(agent["oos_gate"])
-    plt.ylabel("de-risking gate g")
+    plt.ylabel(activity_label)
     plt.xlabel("OOS step")
-    plt.title("Learned de-risking gate over time")
+    plt.title(activity_title)
     plt.savefig(run_dir / "gate_timeseries.png", dpi=120, bbox_inches="tight")
     plt.close()
 
