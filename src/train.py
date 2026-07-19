@@ -34,6 +34,8 @@ def build_env(market: dict, config: dict) -> AllocationEnv:
         window=config["window"],
         cost_bps=config["cost_bps"],
         safe_asset_index=config.get("safe_asset_index"),
+        action_mode=config.get("action_mode", "gate"),
+        max_tilt=config.get("max_tilt", 0.15),
     )
 
 
