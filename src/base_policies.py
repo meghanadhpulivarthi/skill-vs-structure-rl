@@ -27,20 +27,29 @@ def vol_scaled_base(return_window: np.ndarray, target_vol: float = 0.01) -> np.n
 def risk_parity_base(return_window: np.ndarray, max_iter: int = 200, tol: float = 1e-8) -> np.ndarray:
     # Equal-risk-contribution (ERC) weights: each asset contributes the same share
     # of portfolio variance. Closes the correlation-structure gap that equal-weight
-    # and inverse-vol leave open (spec §5.1 item 3, realized as ERC). Solved by the
-    # standard fixed-point iteration on the trailing-window covariance.
+    # and inverse-vol leave open (spec §5.1 item 3, realized as ERC). Uses the
+    # sqrt-damped multiplicative fixed-point iteration: it shares the ERC fixed
+    # point w_i*(Sigma w)_i = const with the raw 1/(Sigma w) map but, unlike that
+    # map, does not oscillate (the undamped map flips between corner and center
+    # allocations for high vol-ratio diagonal covariances and never converges).
     cov = np.cov(return_window, rowvar=False)
     n_assets = cov.shape[0]
     weights = np.full(n_assets, 1.0 / n_assets)
+    converged = False
+    change = np.inf
     for _ in range(max_iter):
         marginal = cov @ weights                       # (Sigma w)_i
         marginal = np.where(np.abs(marginal) < 1e-16, 1e-16, marginal)
-        updated = 1.0 / marginal                       # target inversely to marginal risk
+        updated = np.sqrt(weights / marginal)          # sqrt damping -> stable ERC fixed point
         updated = updated / updated.sum()
-        if np.max(np.abs(updated - weights)) < tol:
-            weights = updated
-            break
+        change = np.max(np.abs(updated - weights))
         weights = updated
+        if change < tol:
+            converged = True
+            break
+    if not converged:
+        print(f"risk_parity_base: ERC iteration did not converge in {max_iter} iters "
+              f"(last weight change {change:.2e}); returning last iterate")
     return project_to_simplex(weights)
 
 

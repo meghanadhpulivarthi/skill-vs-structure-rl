@@ -32,11 +32,9 @@ def test_risk_parity_registered():
 
 def test_risk_parity_downweights_high_vol_and_equalizes_risk():
     rng = np.random.default_rng(0)
-    # Create positively correlated assets for ERC algorithm stability
-    base_signal = rng.normal(0, 0.01, 200)
     win = np.column_stack([
-        base_signal + rng.normal(0, 0.001, 200),       # low-vol asset, correlated
-        base_signal * 10 + rng.normal(0, 0.01, 200),   # high-vol asset (10x), correlated
+        rng.normal(0, 0.005, 200),   # low-vol asset
+        rng.normal(0, 0.05, 200),    # high-vol asset (10x vol)
     ])
     w = risk_parity_base(win)
     assert w[0] > w[1]                                   # low-vol asset gets more weight
