@@ -2,6 +2,31 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — RQ1 headline statistics: OOS-window alignment + small-sample CI
+
+Two decisions locked while resolving the final whole-branch review of Plan 2:
+
+1. **Agent and baselines are scored on the SAME OOS calendar.** The walk-forward
+   agent is evaluated per fold on the test slice *with `window` days of real preceding
+   history prepended*, so the env's warm-up window comes from genuine prior data and the
+   stitched agent series covers exactly `[oos_start, end)` with no per-fold day drop and
+   no cold-started signal. Baselines are rolled over `returns[oos_start-window:]` so they
+   span the identical calendar; `run_rq1` asserts equal OOS lengths. Rationale: the RQ1
+   skill-vs-structure comparison is only defensible if both sides are measured on matching
+   days and denominators (spec §8). This fixed a real bias (dropped agent days clustered
+   at block starts, right after each retrain).
+
+2. **skill_net CI uses a small-sample t critical value, not 1.96.** The CI on
+   `skill_net = agent_mean_skill − placebo_mean` combines the agent's cross-fold SE and the
+   placebo's across-draw SE in quadrature, scaled by `t.ppf(0.975, dof)` with
+   `dof = min(n_folds, n_placebo) − 1` (the placebo arm has few draws, so a normal 1.96
+   understates width). A distribution-free `placebo_exceedance` (fraction of placebo runs
+   whose manufactured skill ≥ the agent's) is also reported as a robustness check.
+   **Open for the real run:** the exact CI construction (quadrature-of-SEs vs. a bootstrap
+   over the stitched OOS skill against the placebo distribution) should be revisited once
+   the real-data verdict's magnitude is known — it is less load-bearing for a
+   skill_net≈0 verdict, more so for a positive one. See [[open-questions]].
+
 ## 2026-07-19 — Phase-randomization placebo destroys volatility clustering (not linear autocorr)
 
 Phase randomization preserves the linear power spectrum and hence linear autocorrelation
