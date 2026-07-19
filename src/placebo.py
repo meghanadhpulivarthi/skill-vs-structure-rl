@@ -1,9 +1,12 @@
 """Phase-randomization placebo: the real-data overfitting/luck null.
 
-Destroys any timeable temporal structure while preserving each asset's marginal
-variance, spectrum, and contemporaneous cross-asset correlation. Running the full
-walk-forward on these surrogates measures the skill the pipeline manufactures from
-noise; the RQ1 headline is real OOS skill NET of this null (open-questions.md).
+Destroys volatility clustering / higher-order (nonlinear) temporal structure — the
+regime and vol-clustering structure the de-risking gate's trailing-vol signal
+exploits — while preserving each asset's marginal variance, linear power spectrum
+(hence linear autocorrelation, by Wiener-Khinchin), and contemporaneous cross-asset
+correlation. Running the full walk-forward on these surrogates measures the skill
+the pipeline manufactures from noise; the RQ1 headline is real OOS skill NET of this
+null (open-questions.md).
 """
 from pathlib import Path
 

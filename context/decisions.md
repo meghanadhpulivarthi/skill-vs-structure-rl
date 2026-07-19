@@ -2,6 +2,17 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — Phase-randomization placebo destroys volatility clustering (not linear autocorr)
+
+Phase randomization preserves the linear power spectrum and hence linear autocorrelation
+(by Wiener-Khinchin theorem) — it does NOT destroy 2nd-order linear structure. What it
+destroys is volatility clustering (squared-return autocorrelation), which is exactly the
+timeable regime/vol-clustering structure the de-risking gate exploits via its trailing-vol
+signal. The original Plan-2 Task-6 test asserting linear-autocorrelation destruction was
+scientifically incorrect and has been replaced with a volatility-clustering-destruction test.
+The null remains valid: it removes exactly the timeable regime/vol structure the gate
+exploits while preserving the linear structure the base already harvests.
+
 ## 2026-07-19 — Base policy: §5.1(3) realized as ERC (not diversity-weighted SPT)
 
 Spec §5.1(3) names an "SPT / diversity-weighted (growth-optimal-oriented)" base to span growth.
