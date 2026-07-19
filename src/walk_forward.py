@@ -68,11 +68,13 @@ def walk_forward_gate(returns: np.ndarray, config: dict, run_dir=None) -> dict:
             continue
 
         train_returns = returns[train_slice.start:train_slice.stop]
-        # Prepend `window` days of real preceding history to the test slice so the
-        # env's warm-up window is drawn from genuine prior data. The env starts
-        # earning at _t=window (== test_slice.start), so roll_policy yields exactly
+        # Prepend the required warm-up window to the test slice so the env's warm-up
+        # is drawn from genuine prior data. Gate mode starts at _t=window; tilt mode
+        # starts at _t=2*window for richer observation. roll_policy yields exactly
         # the test-region steps: no per-fold OOS-day drop and no cold-started signal.
-        eval_start = test_slice.start - window
+        required_window = (2 * window if config.get("action_mode", "gate") == "tilt"
+                           else window)
+        eval_start = test_slice.start - required_window
         test_returns = returns[eval_start:test_slice.stop]
         train_market = build_real_market(train_returns, safe_index, window)
         model = train_agent(train_market, config)

@@ -27,7 +27,10 @@ THREADS = 4
 SAFE_TICKER_PREFERENCE = ("IEF", "TLT")   # de-risking sleeve, resolved by NAME
 PLACEBO_PHASE_BASE = 1000                 # surrogate phase-randomization seed = base + draw
 PLACEBO_TRAIN_BASE = 500                  # placebo PPO training seed = base + draw
-RUN_DIR = Path(__file__).resolve().parent.parent / "outputs" / "rq1_sweep"
+ACTION_MODE = "gate"    # set to "tilt" to sweep the expressive residual-tilt agent
+MAX_TILT = 0.15         # tilt-mode cap (ignored in gate mode); calibrate via the tilt RQ2
+RUN_DIR = (Path(__file__).resolve().parent.parent / "outputs"
+           / ("rq1_sweep_tilt" if ACTION_MODE == "tilt" else "rq1_sweep"))
 
 PER_BASE = N_SEEDS + N_PLACEBO
 TOTAL_TASKS = len(BASES) * PER_BASE
@@ -66,7 +69,8 @@ def main():
 
     base_config = {"base_name": base, "window": WINDOW, "cost_bps": COST_BPS,
                    "safe_asset_index": safe_index, "total_timesteps": TOTAL_TIMESTEPS,
-                   "initial_train": INITIAL_TRAIN, "test_block": TEST_BLOCK}
+                   "initial_train": INITIAL_TRAIN, "test_block": TEST_BLOCK,
+                   "action_mode": ACTION_MODE, "max_tilt": MAX_TILT}
 
     if kind == "agent":
         run_dir = RUN_DIR / base / f"agent_seed{idx}"

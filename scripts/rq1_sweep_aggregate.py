@@ -14,7 +14,7 @@ from scipy import stats
 from scripts.rq1_sweep_task import (
     BASES, N_SEEDS, N_PLACEBO, WINDOW, COST_BPS, TOTAL_TIMESTEPS,
     INITIAL_TRAIN, TEST_BLOCK, PLACEBO_PHASE_BASE, PLACEBO_TRAIN_BASE,
-    RUN_DIR, SAFE_TICKER_PREFERENCE,
+    RUN_DIR, SAFE_TICKER_PREFERENCE, ACTION_MODE, MAX_TILT,
 )
 
 
@@ -32,7 +32,7 @@ def main():
     safe_index = tickers.index(safe_ticker)
     base_cfg = {"window": WINDOW, "cost_bps": COST_BPS, "safe_asset_index": safe_index,
                 "total_timesteps": TOTAL_TIMESTEPS, "initial_train": INITIAL_TRAIN,
-                "test_block": TEST_BLOCK}
+                "test_block": TEST_BLOCK, "action_mode": ACTION_MODE, "max_tilt": MAX_TILT}
 
     summary = {}
     for base in BASES:
