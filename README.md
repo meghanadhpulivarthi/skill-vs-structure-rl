@@ -10,9 +10,10 @@ that, and applies it as a lens on a live contradiction in the literature (some
 papers credit Sharpe-reward RL allocators with tail-risk reduction; others find
 no such advantage once costs and a strong `1/N` benchmark are in play).
 
-> **Status:** research in progress. **Plans 1 (synthetic RQ2) and 2 (real-data RQ1)
-> are complete** — the skill measure is validated *and* applied to real ETFs, with a
-> robust verdict. Plan 3 (causal mechanism probing, RQ3) is scoped, next. See
+> **Status:** research in progress. **Plans 1 (synthetic RQ2), 2 (real-data RQ1), and
+> 3 (expressive-tilt agent) are complete** — the skill measure is validated, applied to
+> real ETFs, and stress-tested against a far more capable agent, with a robust verdict
+> throughout. Causal mechanism probing (RQ3) is scoped, next. See
 > [`docs/`](docs/) and [`context/`](context/) for the full design and decision trail.
 
 ---
@@ -46,6 +47,14 @@ with no forecasting. To separate learned skill from this inherited structure, we
 > The contribution is the *purpose and validation*: a structural-null base +
 > structure-baselined credit assignment + a synthetic ground-truth test that
 > calibrates the skill measure. The relevant prior work is cited, not reinvented.
+
+> **"Did you just cripple the agent?"** A scalar gate is deliberately parsimonious, so
+> a fair reader asks whether a *more expressive* agent would have found skill the gate
+> couldn't. We answered this directly (Plan 3): a **bounded per-asset residual tilt**,
+> `w = project_simplex(base + max_tilt·tanh(a))` with enriched causal features
+> (dual-horizon volatility, momentum, base weights). Zero action still reproduces the
+> base. This agent *can* express arbitrary long-only skill — and the verdict below holds
+> for it too, which is the point.
 
 ## Key result (RQ2)
 
@@ -95,15 +104,40 @@ against the null is essential.
 Together with RQ2 this closes the loop: the method **detects** skill when it exists
 (synthetic) and finds **none** on real markets net of luck — robustly across bases and seeds.
 
+## Key result (expressive agent — the fairness check)
+
+Giving the agent a real shot at skill *sharpens* the verdict rather than softening it.
+The expressive per-asset tilt passes the **same synthetic validity gate** as the gate —
+judged *net of the signal-off null* (the tilt agent cannot reach a costless do-nothing
+floor; with no signal it over-churns and loses ~−6 × 10⁻⁵, so we require skill **net of
+that churn null** to be clearly positive): `skill_off = −6.4 × 10⁻⁵`,
+`skill_on = +1.4 × 10⁻⁴`, **`skill_net = +2.0 × 10⁻⁴`** (4× the floor). The measure still
+detects skill only when timeable structure exists — for the capable agent too.
+
+On real ETFs, the same robustness sweep (5 agent seeds + 10 placebo draws per base) shows
+the expressive agent adds **no skill above structure — and loses *more* than the gate**:
+
+| Structural base | Gate skill net of null | **Tilt skill net of null** | Placebo exceedance |
+| --- | --- | --- | --- |
+| equal-weight | −1.76 × 10⁻⁴ | **−2.06 × 10⁻⁴** | 1.00 |
+| vol-scaled  | −1.19 × 10⁻⁴ | **−1.75 × 10⁻⁴** | 1.00 |
+| risk-parity | −1.01 × 10⁻⁴ | **−1.54 × 10⁻⁴** | 1.00 |
+
+The tilt agent loses ~1.5–1.8× what the gate does, in the same base-ordering (worst for the
+weakest base). This is the **over-churn mechanism confirmed on real data**: more
+expressiveness means more churn, and where no timeable structure exists that churn is pure
+cost drag, not edge. A capable agent doesn't rescue the RL allocator — it demonstrates,
+more forcefully, that skill above structure isn't there to be found.
+
 ## Repository layout
 
 ```
 src/
   simplex.py            # Euclidean projection onto the probability simplex
   metrics.py            # ES/CVaR, max drawdown, tail ratio, skew, Sharpe, Sortino, turnover
-  synthetic_market.py   # regime-switching markets + toggleable signal (incl. risky+safe world)
+  synthetic_market.py   # regime-switching markets + toggleable signal (risky+safe & multi-regime worlds)
   base_policies.py      # structural-null bases: equal-weight, vol-scaled, risk-parity (ERC)
-  allocation_env.py     # Gymnasium env: de-risking-gate action + structure-baselined reward
+  allocation_env.py     # Gymnasium env: de-risking-gate OR bounded per-asset tilt action + structure-baselined reward
   train.py              # PPO training entrypoint (traceable, seeded)
   validate_skill.py     # RQ2 experiment: skill vs. signal strength (synthetic ground truth)
   data.py               # real ETF panel via yfinance, cached (RQ1)
@@ -150,7 +184,11 @@ Every run writes a timestamped folder under `outputs/` with `config.json`,
   and literature baselines (`1/N`, minimum-variance, CVaR-min). Skill reported *net of a
   phase-randomization placebo null* with CIs; verdict is learned skill ≈ 0, robust across
   bases and seeds.
-- **Plan 3 — causal mechanism probing (RQ3): scoped, next.** Interventions (volatility
+- **Plan 3 — expressive-tilt fairness check: complete.** A bounded per-asset residual
+  tilt with enriched causal features, validated on synthetic ground truth (net-of-null)
+  and swept on real ETFs. Verdict holds: the capable agent adds no skill above structure
+  and over-churns *more* than the gate on real markets.
+- **Plan 4 — causal mechanism probing (RQ3): scoped, next.** Interventions (volatility
   shocks, regime flips, feature freezes) on the trained agent to test whether standard
   attribution (SHAP/saliency) identifies the true mechanism.
 

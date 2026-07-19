@@ -2,6 +2,33 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — RQ1 REAL-DATA VERDICT (TILT): expressive agent adds no skill, and loses MORE than the gate
+
+**Result (LSF array 1123950[1-45], 45/45 done 0 fail; 5 agent seeds + 10 placebo draws per
+base; `scripts/rq1_sweep_task.py` with `ACTION_MODE="tilt"`, `MAX_TILT=0.15`; cached folds in
+`outputs/rq1_sweep_tilt/`, summary.json + skill_net_by_base.png):** H1 holds for the expressive
+tilt agent too — it adds NO learned skill above the structural base on real ETFs, on every base,
+and the loss is LARGER than the scalar gate's. skill_net (agent mean − placebo mean), all CIs
+entirely below 0, placebo-exceedance = 1.00 for all three:
+
+| base | gate agent / net (Plan 2) | tilt agent / net (Plan 3) |
+|---|---|---|
+| equal_weight | −8.6e-5 / −1.76e-4 | **−1.56e-4 / −2.06e-4** |
+| vol_scaled   | −7.1e-5 / −1.19e-4 | **−1.26e-4 / −1.75e-4** |
+| risk_parity  | −6.0e-5 / −1.01e-4 | **−1.03e-4 / −1.54e-4** |
+
+Every agent seed is negative on every base; the placebo (luck) floor is POSITIVE everywhere
+(~+5e-5), so netting stays essential; all 10 surrogates beat the agent for every base.
+
+**Interpretation — closes the loop.** The tilt agent's real-data loss is ~1.5–1.8× the gate's
+on each base. This is the **over-churn mechanism confirmed on real data**: giving the agent more
+expressiveness (per-asset tilt vs. a scalar gate) lets it churn more, and on real markets — where
+there is no reliably timeable structure — that extra churn is pure cost drag, not edge. Same
+ordering as the gate: loss is largest for the weakest base (equal_weight → more tilt activation →
+more turnover) and smallest for risk_parity. Trustworthy because the synthetic tilt RQ2 proved the
+SAME measure detects skill net-of-null when timeable structure exists. **The expressive agent
+STRENGTHENS H1, it does not rescue the RL allocator:** capability without timeable structure loses.
+
 ## 2026-07-19 — Tilt RQ2 judged NET-OF-NULL; the tilt agent over-churns signal-off (supersedes the entry below)
 
 **Finding (robust, LSF, 5–8 seeds):** the expressive residual-tilt agent CANNOT reach a
