@@ -36,3 +36,4 @@ def test_load_etf_panel_uses_cache(tmp_path):
     assert panel["returns"].shape == (3, 2)           # 4 prices -> 3 returns
     assert panel["tickers"] == ["A", "B"]
     assert panel["dates"].shape == (3,)
+    assert panel["returns"].dtype == np.float64

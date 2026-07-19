@@ -38,12 +38,21 @@ def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
 def download_prices(tickers: list, start: str, end: str, cache_path: Path) -> pd.DataFrame:
     cache_path = Path(cache_path)
     if cache_path.exists():
-        print(f"download_prices: loading cache {cache_path}")
+        print(f"download_prices: loading cache {cache_path} (start/end args ignored — delete the cache to re-download a different range)")
         return pd.read_parquet(cache_path)
     import yfinance as yf
     print(f"download_prices: downloading {len(tickers)} tickers {start}..{end} from yfinance")
     raw = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
-    prices = raw["Close"].dropna(how="all")
+    close = raw["Close"]
+    n_before = len(close)
+    prices = close.dropna(how="all")
+    n_dropped = n_before - len(prices)
+    if n_dropped:
+        print(f"download_prices: dropped {n_dropped} all-NaN rows")
+    partial_na = prices.isna().sum()
+    partial_cols = partial_na[partial_na > 0]
+    if len(partial_cols):
+        print(f"download_prices: partial-NaN counts per ticker (will drop these tickers downstream): {partial_cols.to_dict()}")
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(cache_path)
     print(f"download_prices: cached {prices.shape[0]} rows x {prices.shape[1]} tickers to {cache_path}")
