@@ -25,13 +25,6 @@ from src.base_policies import equal_weight_base, vol_scaled_base, risk_parity_ba
 from src.metrics import (expected_shortfall, max_drawdown, tail_ratio,
                          skewness, sharpe, sortino)
 
-BASE_FNS = {
-    "equal_weight": equal_weight_base,
-    "vol_scaled": vol_scaled_base,
-    "risk_parity": risk_parity_base,
-}
-
-
 def compute_metrics_bundle(net_returns: np.ndarray) -> dict:
     net_returns = np.asarray(net_returns, dtype=float)
     return {
@@ -67,6 +60,11 @@ def run_rq1(config: dict, returns: np.ndarray = None, run_dir=None) -> dict:
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    n_folds_estimate = len(make_folds(returns.shape[0], config["initial_train"], config["test_block"]))
+    print(f"run_rq1: ~{n_folds_estimate} agent folds + {config['n_placebo']} x {n_folds_estimate} placebo "
+          f"folds = ~{n_folds_estimate * (1 + config['n_placebo'])} PPO trainings at "
+          f"{config['total_timesteps']} steps each — expect a long run on the real panel")
+
     # Agent: per-fold retrained gate, stitched OOS.
     agent = walk_forward_gate(returns, config, run_dir=run_dir / "agent")
     null = placebo_null(returns, config, n_placebo=config["n_placebo"],
@@ -74,30 +72,52 @@ def run_rq1(config: dict, returns: np.ndarray = None, run_dir=None) -> dict:
 
     # skill net of the luck/overfitting floor, with a CI combining agent-fold and
     # placebo spread (added in quadrature; both are estimates of a mean skill).
+    from scipy import stats
     skill_net = agent["mean_skill"] - null["mean"]
     fold_skills = np.asarray(agent["fold_mean_skill"], dtype=float)
-    agent_se = fold_skills.std(ddof=1) / np.sqrt(len(fold_skills)) if len(fold_skills) > 1 else 0.0
     placebo_arr = np.asarray(null["placebo_skills"], dtype=float)
+    agent_se = fold_skills.std(ddof=1) / np.sqrt(len(fold_skills)) if len(fold_skills) > 1 else 0.0
     placebo_se = placebo_arr.std(ddof=1) / np.sqrt(len(placebo_arr)) if len(placebo_arr) > 1 else 0.0
-    half_width = 1.96 * float(np.sqrt(agent_se ** 2 + placebo_se ** 2))
+    combined_se = float(np.sqrt(agent_se ** 2 + placebo_se ** 2))
+    # Small-sample t critical value on the more conservative (smaller) arm's dof — the
+    # placebo arm has few draws, so a normal 1.96 would understate the interval width.
+    dof = max(1, min(len(fold_skills), len(placebo_arr)) - 1)
+    t_crit = float(stats.t.ppf(0.975, dof))
+    half_width = t_crit * combined_se
     skill_net_ci = [skill_net - half_width, skill_net + half_width]
+    # Distribution-free robustness check: fraction of placebo (luck) runs whose
+    # manufactured skill meets or exceeds the agent's OOS skill.
+    placebo_exceedance = float(np.mean(placebo_arr >= agent["mean_skill"]))
 
-    # Baselines on the SAME OOS index region and cost model.
     oos_start = _oos_start(returns.shape[0], config)
-    oos_returns = returns[oos_start:]
     window = config["window"]
     cost_bps = config["cost_bps"]
+    # Roll baselines over the SAME OOS calendar as the stitched agent series: prepend
+    # `window` days of real history so the first scored day is exactly oos_start,
+    # matching the agent (whose per-fold warm-up is also drawn from prior history).
+    baseline_returns = returns[oos_start - window:]
+    agent_oos_len = len(agent["oos_port_return"])
+    baseline_series = {
+        "one_over_n": roll_weights(equal_weight_base, baseline_returns, window, cost_bps),
+        "min_variance": roll_weights(minimum_variance_base, baseline_returns, window, cost_bps),
+        "cvar_min": roll_weights(cvar_min_base, baseline_returns, window, cost_bps),
+    }
+    for _name, _series in baseline_series.items():
+        assert len(_series) == agent_oos_len, (
+            f"OOS length mismatch: baseline {_name} has {len(_series)} steps, "
+            f"agent has {agent_oos_len} — agent and baselines must span the same OOS window")
     metrics_table = {
         "agent": compute_metrics_bundle(agent["oos_port_return"]),
         "base": compute_metrics_bundle(agent["oos_base_return"]),
-        "one_over_n": compute_metrics_bundle(roll_weights(equal_weight_base, oos_returns, window, cost_bps)),
-        "min_variance": compute_metrics_bundle(roll_weights(minimum_variance_base, oos_returns, window, cost_bps)),
-        "cvar_min": compute_metrics_bundle(roll_weights(cvar_min_base, oos_returns, window, cost_bps)),
+        "one_over_n": compute_metrics_bundle(baseline_series["one_over_n"]),
+        "min_variance": compute_metrics_bundle(baseline_series["min_variance"]),
+        "cvar_min": compute_metrics_bundle(baseline_series["cvar_min"]),
     }
 
     result = {
         "mean_skill": agent["mean_skill"],
         "placebo_mean": null["mean"],
+        "placebo_exceedance": placebo_exceedance,
         "skill_net": float(skill_net),
         "skill_net_ci": [float(skill_net_ci[0]), float(skill_net_ci[1])],
         "fold_mean_skill": agent["fold_mean_skill"],

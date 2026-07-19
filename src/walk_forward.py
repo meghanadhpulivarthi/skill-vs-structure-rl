@@ -55,6 +55,10 @@ def walk_forward_gate(returns: np.ndarray, config: dict, run_dir=None) -> dict:
     if run_dir is not None:
         run_dir.mkdir(parents=True, exist_ok=True)
 
+    if config["initial_train"] < window:
+        raise ValueError(f"initial_train ({config['initial_train']}) must be >= window ({window}) "
+                         "so each fold has a real preceding warm-up window")
+
     per_fold = []
     for fold_index, (train_slice, test_slice) in enumerate(folds):
         cache = run_dir / f"fold_{fold_index:02d}.npz" if run_dir is not None else None
@@ -64,7 +68,12 @@ def walk_forward_gate(returns: np.ndarray, config: dict, run_dir=None) -> dict:
             continue
 
         train_returns = returns[train_slice.start:train_slice.stop]
-        test_returns = returns[test_slice.start:test_slice.stop]
+        # Prepend `window` days of real preceding history to the test slice so the
+        # env's warm-up window is drawn from genuine prior data. The env starts
+        # earning at _t=window (== test_slice.start), so roll_policy yields exactly
+        # the test-region steps: no per-fold OOS-day drop and no cold-started signal.
+        eval_start = test_slice.start - window
+        test_returns = returns[eval_start:test_slice.stop]
         train_market = build_real_market(train_returns, safe_index, window)
         model = train_agent(train_market, config)
         test_market = build_real_market(test_returns, safe_index, window)
