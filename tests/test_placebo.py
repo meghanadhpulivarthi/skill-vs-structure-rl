@@ -35,7 +35,7 @@ def test_phase_randomize_destroys_volatility_clustering():
     original_vol_clustering = lag1(returns.ravel() ** 2)
     surrogate_vol_clustering = lag1(surrogate.ravel() ** 2)
     # Regime switching creates vol clustering in squared returns
-    assert original_vol_clustering > 0.15           # volatility persistence signal
+    assert original_vol_clustering > 0.17           # strong vol clustering by construction (true value ~0.18)
     assert abs(surrogate_vol_clustering) < 0.1      # phase randomization destroys it
 
 
