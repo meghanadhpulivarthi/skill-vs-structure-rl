@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from src.synthetic_market import generate_risky_safe_market
+from src.synthetic_market import generate_risky_safe_market, generate_multi_regime_market
 from src.train import build_env, train_agent
 from src.metrics import expected_shortfall, turnover
 
@@ -47,6 +47,16 @@ def evaluate_skill(model, market: dict, config: dict) -> dict:
     }
 
 
+def _build_synthetic_market(config: dict, seed: int, signal_strength: float) -> dict:
+    market_kind = config.get("market", "risky_safe")   # default preserves the gate RQ2
+    if market_kind == "risky_safe":
+        return generate_risky_safe_market(config["n_steps"], seed=seed, signal_strength=signal_strength)
+    if market_kind == "multi_regime":
+        return generate_multi_regime_market(config["n_risky"], config["n_safe"], config["n_steps"],
+                                            seed=seed, signal_strength=signal_strength)
+    raise ValueError(f"unknown market {market_kind!r}; expected 'risky_safe' or 'multi_regime'")
+
+
 def run_skill_validation(config: dict, signal_strengths=(0.0, 0.95), n_seeds: int = 5) -> dict:
     now = datetime.datetime.now()
     print("=" * 60)
@@ -59,11 +69,9 @@ def run_skill_validation(config: dict, signal_strengths=(0.0, 0.95), n_seeds: in
     for strength in signal_strengths:
         seed_rewards = []
         for seed in tqdm(range(n_seeds), desc=f"signal={strength}"):
-            train_market = generate_risky_safe_market(config["n_steps"], seed=1000 + seed,
-                                                       signal_strength=strength)
+            train_market = _build_synthetic_market(config, seed=1000 + seed, signal_strength=strength)
             model = train_agent(train_market, {**config, "seed": seed})
-            eval_market = generate_risky_safe_market(config["n_steps"], seed=2000 + seed,
-                                                     signal_strength=strength)
+            eval_market = _build_synthetic_market(config, seed=2000 + seed, signal_strength=strength)
             seed_rewards.append(evaluate_skill(model, eval_market, config)["mean_baselined_reward"])
         by_strength[str(strength)] = {
             "mean_baselined_reward": float(np.mean(seed_rewards)),

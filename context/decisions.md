@@ -2,6 +2,22 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-19 — Tilt RQ2 calibration: max_tilt=0.15 passes on multi-regime market
+
+**Chosen `max_tilt`: 0.15** (the brief's initial value — no sweep needed).
+
+Tilt RQ2 test on multi_regime market (n_risky=3, n_safe=2, 120k steps, 3 seeds):
+- `skill_off` (signal=0.0): **-9.5e-6** (|skill_off| = 9.5e-6 < 5e-5 ✓)
+- `skill_on` (signal=0.95): **9.38e-5** (> 5e-5 ✓; > 3×|skill_off| ✓)
+
+All three assertions pass at max_tilt=0.15. No sweep of {0.20, 0.25} was needed.
+Run artifact: `outputs/2026-07-19_11-24-05_skill-validation/`.
+
+The tilt agent on the multi-regime market (5 assets: 3 risky + 2 safe) exhibits the
+same RQ2 shape as the gate agent on the 2-asset risky_safe market: skill vanishes
+without timeable structure and is clearly positive when the signal leads crises.
+This validates the skill measure for the expressive tilt action.
+
 ## 2026-07-19 — RQ1 headline statistics: OOS-window alignment + small-sample CI
 
 Two decisions locked while resolving the final whole-branch review of Plan 2:
