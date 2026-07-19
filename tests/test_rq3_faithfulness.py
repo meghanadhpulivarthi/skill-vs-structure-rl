@@ -1,0 +1,34 @@
+# tests/test_rq3_faithfulness.py
+import numpy as np
+import torch
+from src.rq3_faithfulness import run_probe
+from src.interventions import feature_groups
+
+
+def test_run_probe_identifies_signal_as_causal_driver_and_emits_verdict():
+    # Ground-truth gate that uses ONLY the signal feature (index 42). Both the
+    # numpy gate_fn and the differentiable gate_mean_fn express the same policy,
+    # so causal ablation AND faithful attribution must both rank `signal` top.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return 1.0 / (1.0 + np.exp(-4.0 * obs[:, 42]))
+
+    def gate_mean_fn(obs_tensor):
+        return torch.sigmoid(4.0 * obs_tensor[:, 42])
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(200, 43)).astype(np.float32)
+    groups = feature_groups(window=20, n_assets=2)
+    verdict = run_probe(gate_fn, gate_mean_fn, obs, groups, seed=0)
+
+    # premise: the signal is the dominant CAUSAL driver (this is ground truth)
+    assert verdict["top_group"]["causal_freeze"] == "signal"
+    assert verdict["causal"]["freeze"]["signal"] > verdict["causal"]["freeze"]["returns"]
+    # a faithful attribution recovers it too (this stub policy IS faithful)
+    assert verdict["top_group"]["saliency"] == "signal"
+    # verdict object has the full required shape
+    assert set(verdict) == {"causal", "attribution", "spearman", "top_group"}
+    assert set(verdict["spearman"]) == {"saliency_freeze", "saliency_permute",
+                                        "shap_freeze", "shap_permute"}
+    for rho in verdict["spearman"].values():
+        assert -1.0 <= rho <= 1.0
