@@ -137,7 +137,32 @@ explanatory \cite{atrey2020}. We contribute a controlled, causally grounded test
 what these tools recover for RL allocators specifically, adjudicated against
 interventional ground truth where it exists.
 
+Our skill measure is complementary to benchmark-relative evaluation. Where prior work
+asks whether an RL allocator beats $1/N$ or mean--variance on net returns
+\cite{demiguel2009,kruthof2025}, we ask a sharper question: does the agent add value
+\emph{above the specific transparent rule it is built on top of}? Because the base is
+nested inside the policy (a zero residual is the base), the comparison is exact and
+per-path rather than across-strategy, which removes the market-path confound that
+makes cross-strategy Sharpe comparisons noisy and sample-dependent. This mirrors, on
+the evaluation side, what residual policy learning \cite{silver2018} does on the
+optimization side: define performance relative to a known-good reference so that only
+the increment must be learned and judged.
+
 \section{Method}
+
+\subsection{Background: the free structure}
+Three properties give a long-only allocator downside protection with no forecasting.
+The probability-simplex constraint ($w\ge 0$, $\mathbf{1}^\top w = 1$) bounds any
+single position and forces diversification. Maximizing expected \emph{log} wealth is
+implicitly variance-averse, penalizing the large drawdowns that compound
+destructively. And the rebalancing premium of Stochastic Portfolio Theory
+\cite{fernholz2002} shows that a diversified, periodically rebalanced portfolio earns
+an excess growth rate over its buy-and-hold counterpart purely from the geometry of
+rebalancing. A base policy that harvests these---equal-weight, volatility-scaled
+\cite{moreira2017}, or equal-risk-contribution risk parity \cite{maillard2010}---
+therefore already reduces tail risk before any learning takes place. The empirical
+question is whether an RL residual adds anything \emph{beyond} that free structure,
+and our design is built so that this increment is exactly what the reward measures.
 
 \subsection{Structure-baselined residual RL}
 Let $b_t \in \Delta^{n-1}$ be the weights of a fixed base policy on the probability
@@ -231,15 +256,20 @@ $[\,\text{window}\times n\ \text{returns}\mid n\ \text{short vol}\mid 1\
 \text{signal}\,]$ (232-dim for the real panel with window 20); the tilt observation
 adds dual-horizon volatility, momentum, and the base weights (121-dim in the 5-asset
 synthetic world). We use PPO with an MLP policy, 150k training steps, and five seeds;
-real robustness sweeps use five agent seeds and ten placebo draws per base. On real
-data the safe sleeve is resolved by ticker (intermediate then long Treasuries), never
-a hardcoded index. Heavy training runs on a CPU batch cluster with thread caps; a GPU
-gives no benefit for this small policy, whose bottleneck is environment stepping. All
-reported figures are held out.
+real robustness sweeps use five agent seeds and ten placebo draws per base. The
+turnover cost is $c\|w_t-w_{t-1}\|_1$ at $10$\,bps, charged identically to agent and
+base. The walk-forward uses a $1260$-day (five-year) initial training window and
+$252$-day (one-year) test blocks, retraining per fold and stitching the held-out
+predictions; baselines are rolled over the same out-of-sample calendar. On real data
+the safe sleeve is resolved by ticker (intermediate then long Treasuries), never a
+hardcoded index, because vendor columns are alphabetical. Heavy training runs on a CPU
+batch cluster with thread caps; a GPU gives no benefit for this small policy, whose
+bottleneck is environment stepping rather than matrix multiplication. All reported
+figures are held out.
 
 \subsection{The skill measure is valid (RQ-skill, synthetic)}
-Table~\ref{tab:rq2} shows mean skill rising monotonically with signal strength for
-the gate and vanishing toward the unforecastable null. The expressive tilt cannot
+Table~\ref{tab:rq2} and Figure~\ref{fig:rq2} show mean skill rising monotonically with
+signal strength for the gate and vanishing toward the unforecastable null. The expressive tilt cannot
 reach a costless do-nothing floor---with no signal it over-churns and loses about
 $-6.4\times10^{-5}$---so it is judged net of that churn null: skill-on minus
 skill-off is $+2.0\times10^{-4}$, about four times the floor. The measure detects
@@ -268,6 +298,15 @@ matched null (\S\ref{sec:rq1}).
     \bottomrule
   \end{tabular}
 \end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.82\columnwidth]{fig_rq2_curve}
+  \caption{Synthetic skill vs.\ signal strength (gate). Mean held-out skill rises
+  monotonically with forecastability and collapses toward the noisy null floor
+  (shaded band) at $\sigma=0$, exactly the behaviour a valid skill measure must show.}
+  \label{fig:rq2}
+\end{figure}
 
 \subsection{No skill above structure (RQ-skill, real ETFs)}\label{sec:rq1}
 Tables~\ref{tab:rq1gate} and~\ref{tab:rq1tilt} report skill net of the placebo null
@@ -353,12 +392,19 @@ mechanism (none of five seeds degenerate). Given that live mechanism, per-featur
 agreement with causal ablation is strong---saliency $+0.996$, SHAP $+0.79$---
 preserving the saliency-over-SHAP ordering seen synthetically. All four methods
 attribute about $0.96$ of the normalized share to the recent-returns block (causal
-freeze $0.963$, permute $0.961$; saliency $0.962$; SHAP $0.922$), with the crisis
+freeze $0.963$, permute $0.961$; saliency $0.962$; SHAP $0.922$; Figure~\ref{fig:shares}), with the crisis
 signal a minor contributor; SHAP again shifts slightly more mass onto the signal
 ($0.05$ vs.\ causal $0.014$), the same salience bias. Unlike the synthetic tilt this
 is not a cardinality artifact, since the signal is only about three times an average
 return feature. The real allocator has a coherent, faithfully readable decision rule;
 the rule simply is not skillful.
+
+As a directional legibility check, the interventions behave as a de-risking policy
+should: injecting a transient volatility shock into the replayed path raises the gate
+(more weight to the safe sleeve) relative to the unshocked path, and forcing the
+crisis signal high does likewise. The agent thus reads volatility and the signal in
+the expected direction; what it lacks is not responsiveness but an edge that survives
+costs.
 
 \begin{table}[t]
   \caption{Faithfulness probe: per-feature Spearman between the causal profile and
@@ -377,6 +423,16 @@ the rule simply is not skillful.
   \end{tabular}
 \end{table}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_real_shares}
+  \caption{Real agent: normalized per-feature group shares by method. All four tracks
+  agree the recent-returns block dominates the de-risking decision; SHAP places
+  slightly more mass on the salient signal than the causal tracks do, the same bias
+  seen synthetically.}
+  \label{fig:shares}
+\end{figure}
+
 \section{Discussion and Limitations}
 The questions close a loop. The measure detects skill when it exists (synthetic),
 finds none on real markets net of luck (both agents, three bases), and shows the
@@ -389,6 +445,17 @@ ablation rather than trust a single method. The real-agent result is a useful
 corrective on its own: a low mean action can hide an active decision rule, and only
 an absolute-magnitude diagnostic---not a normalized share---reveals whether there is a
 mechanism to explain at all.
+
+Two implications for practice follow. First, an interpretability report for an RL
+allocator should not lean on a single attribution method: because reliability is
+agent-dependent, a cheap causal ablation is worth running as an arbiter, and a large
+saliency--SHAP disagreement is a signal to do so. Second, the result that the
+\emph{more} expressive agent loses \emph{more} is not incidental. With no timeable
+edge in the data, every additional degree of freedom the policy can move is an
+additional way to incur turnover cost without compensating return; expressiveness is
+therefore a liability, not an asset, precisely when there is no skill to express. This
+argues for reporting RL-allocator results against a structural base at several
+expressiveness levels, as we do, rather than at a single architecture.
 
 Several limitations bound these claims. The synthetic market is deliberately simple,
 chosen so that ``no skill'' is well defined rather than realistic. The real study uses

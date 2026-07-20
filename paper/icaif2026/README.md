@@ -26,11 +26,11 @@ matter is ≤ 8 pages. The main body does not depend on the appendix.
 ## Files
 - **`paper_icaif.tex` — the ICAIF submission cut.** Self-contained: all the
   appendix detail (scale/cardinality confound fix, activity diagnostics, obs layout,
-  reproducibility, risk metrics) folded into the body, plus a results figure
-  (`fig_skill_net.pdf`). No appendix. This is the file to submit. Estimated ~7 pages
-  compiled (I could not compile here; see below), i.e. under the 8-page cap.
-- **`fig_skill_net.pdf`** — RQ1 skill-net-by-base figure, generated from the recorded
-  results (regenerate via the snippet in the git history if needed).
+  reproducibility, risk metrics) folded into the body, plus three results figures.
+  No appendix. This is the file to submit. **Compiles to 5 pages** (measured), well
+  under the 8-page cap.
+- **`fig_skill_net.pdf`, `fig_real_shares.pdf`, `fig_rq2_curve.pdf`** — results
+  figures, all generated from the recorded numbers.
 - **`paper.tex` — the extended (arXiv) version.** Identical body plus an appendix
   with the full risk-metric discussion, the scale/cardinality confound fix, the
   activity diagnostics, the observation layout, and reproducibility. Use for arXiv,
@@ -42,10 +42,15 @@ Both `.tex` files pass the same static checks (env/brace balance; 17 citations, 
 undefined, 0 orphan).
 
 ## Compiling
-There is **no LaTeX toolchain on this machine** (no `pdflatex`, no `tectonic`, no TeX
-module), and the sandbox blocked me from downloading a TeX engine — so I could **not**
-compile it here. Static checks only: environment/brace balance and citation integrity
-(17 keys, 0 undefined, 0 orphan) all pass. Three ways to build:
+Built with the `tectonic` engine that already exists at
+`../../../partial-moments-audit/.tools/tectonic` (installed by a prior session). Both
+files compile clean (only cosmetic overfull-hbox warnings): `paper_icaif.pdf` = 5
+pages, `paper.pdf` = 5 pages. To rebuild:
+```
+TECTONIC=/dccstor/meghanadhp/projects/Helix/partial-moments-audit/.tools/tectonic
+"$TECTONIC" paper_icaif.tex   # -> paper_icaif.pdf (runs bibtex internally)
+```
+Other ways to build:
 
 **1. Overleaf (easiest, no install):** new project → upload `paper.tex` +
 `references.bib` → compiler pdfLaTeX. `acmart` is built in; it builds as-is.
