@@ -27,8 +27,8 @@ matter is ≤ 8 pages. The main body does not depend on the appendix.
 - **`paper_icaif.tex` — the ICAIF submission cut.** Self-contained: all the
   appendix detail (scale/cardinality confound fix, activity diagnostics, obs layout,
   reproducibility, risk metrics) folded into the body, plus three results figures.
-  No appendix. This is the file to submit. **Compiles to 5 pages** (measured), well
-  under the 8-page cap.
+  No appendix. This is the file to submit. **Compiles to 6 pages** (measured: 4
+  figures incl. a TikZ architecture schematic, 5 tables), under the 8-page cap.
 - **`fig_skill_net.pdf`, `fig_real_shares.pdf`, `fig_rq2_curve.pdf`** — results
   figures, all generated from the recorded numbers.
 - **`paper.tex` — the extended (arXiv) version.** Identical body plus an appendix
@@ -44,7 +44,7 @@ undefined, 0 orphan).
 ## Compiling
 Built with the `tectonic` engine that already exists at
 `../../../partial-moments-audit/.tools/tectonic` (installed by a prior session). Both
-files compile clean (only cosmetic overfull-hbox warnings): `paper_icaif.pdf` = 5
+files compile clean (only cosmetic overfull-hbox warnings): `paper_icaif.pdf` = 6
 pages, `paper.pdf` = 5 pages. To rebuild:
 ```
 TECTONIC=/dccstor/meghanadhp/projects/Helix/partial-moments-audit/.tools/tectonic

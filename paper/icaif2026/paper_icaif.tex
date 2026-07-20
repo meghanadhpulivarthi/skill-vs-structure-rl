@@ -16,6 +16,8 @@
 
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
 
 \begin{document}
 
@@ -189,11 +191,31 @@ r_t = \log\!\big(1 + w_t^\top \rho_t - c\|w_t - w_{t-1}\|_1\big)
     - \log\!\big(1 + b_t^\top \rho_t - c\|b_t - b_{t-1}\|_1\big),
 \end{equation}
 where $\rho_t$ are asset returns and $c$ the per-unit cost. The cumulative reward is
-realized \emph{skill above structure}; it is zero for the base itself, so the
+realized \emph{skill above structure} (Figure~\ref{fig:arch}); it is zero for the base itself, so the
 gradient sees only what the agent adds. We train PPO \cite{schulman2017} with an MLP
 policy via Stable-Baselines3 \cite{raffin2021}. The observation is a trailing return
 window plus realized volatility, and (for the tilt) dual-horizon volatility,
 momentum, and the base weights, with a de-risking signal.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\columnwidth}{!}{%
+  \begin{tikzpicture}[>=Latex, node distance=6mm and 8mm,
+    b/.style={draw, rounded corners, inner sep=3pt, align=center}]
+    \node[b] (base) {base policy\\$b_t\in\Delta^{n-1}$};
+    \node[b, right=of base] (pi) {PPO residual\\$a_t=\pi_\theta(o_t)$};
+    \node[b, right=of pi] (w) {execute\\$w_t=\Pi_\Delta(b_t+\tau\tanh a_t)$};
+    \node[b, below=7mm of w] (r) {structure-baselined reward\\$r_t=\log\mathrm{net}(w_t)-\log\mathrm{net}(b_t)$};
+    \draw[->] (base) -- (pi);
+    \draw[->] (pi) -- (w);
+    \draw[->] (w) -- (r);
+    \draw[->] (base.south) |- (r.west);
+  \end{tikzpicture}}
+  \caption{Structure-baselined residual architecture. The base is nested inside the
+  policy ($a_t=0\Rightarrow w_t=b_t$), and the reward credits only the agent's
+  net-log-return increment over the base on the same market path.}
+  \label{fig:arch}
+\end{figure}
 
 \subsection{Synthetic ground truth}
 To calibrate the measure we generate regime-switching markets with a \emph{toggleable}
@@ -214,7 +236,7 @@ agent (placebo exceedance). Agents are evaluated with an anchored expanding-wind
 walk-forward and per-fold retraining, and placed beside $1/N$, minimum-variance, and
 CVaR-minimizing baselines on the same out-of-sample window.
 
-\subsection{Causal-vs-attribution faithfulness probe}
+\subsection{Causal-vs-attribution faithfulness probe}\label{sec:probe}
 Given a trained policy we replay its deterministic decisions and measure two tracks
 over the observation features. The \emph{causal} track ablates each feature (freeze
 to its mean; permute across time) and records the mean absolute change in the
@@ -316,7 +338,7 @@ placebo (luck) mean is positive everywhere (so netting is essential), and every
 structureless surrogate beats the real agent (placebo exceedance $=1.00$) for all
 bases and both agents. The gate learns to mostly do nothing (mean gate $\approx0.04$),
 tracking its base on every reported tail and risk metric---expected shortfall,
-maximum drawdown, tail ratio, skewness, Sharpe, and Sortino---while both the agent and
+maximum drawdown, tail ratio, skewness, Sharpe, and Sortino (Table~\ref{tab:metrics})---while both the agent and
 its base clearly beat naive $1/N$ on the downside. The agent-versus-base differences
 are within noise, so the tail benefit over $1/N$ is inherited structure (risk-parity /
 de-risking geometry), not learned skill: the agent does not improve on the base it
@@ -364,6 +386,26 @@ A capable agent sharpens the verdict rather than rescuing it.
     Equal-weight & $-1.56$e-4 & $-2.06$e-4 & $1.17\times$\\
     Vol-scaled   & $-1.26$e-4 & $-1.75$e-4 & $1.47\times$\\
     Risk-parity  & $-1.03$e-4 & $-1.54$e-4 & $1.52\times$\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \caption{Out-of-sample risk metrics on real ETFs (risk-parity base). The gate agent
+  matches its base on every metric; both dominate naive $1/N$. ES$_{99}$ and max
+  drawdown are returns (less negative is better); tail ratio, skew, Sharpe, and Sortino
+  higher is better.}
+  \label{tab:metrics}
+  \small
+  \begin{tabular}{lrrrrrr}
+    \toprule
+     & ES$_{99}$ & MaxDD & Tail & Skew & Sharpe & Sortino\\
+    \midrule
+    Agent (gate)     & $-.016$ & $-.19$ & $1.00$ & $-.11$ & $0.92$ & $1.33$\\
+    Risk-parity base & $-.017$ & $-.17$ & $1.00$ & $-.24$ & $0.93$ & $1.33$\\
+    $1/N$            & $-.031$ & $-.26$ & $0.98$ & $-.53$ & $0.78$ & $1.09$\\
+    Min-variance     & $-.026$ & $-.17$ & $1.00$ & $-.37$ & $0.92$ & $1.30$\\
+    CVaR-min         & $-.016$ & $-.13$ & $0.99$ & $-.23$ & $0.68$ & $0.97$\\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -422,6 +464,20 @@ costs.
     \bottomrule
   \end{tabular}
 \end{table}
+
+\subsection{Ablations}
+Three design choices are load-bearing, and removing any one flips a headline
+conclusion. \emph{Tilt bound}: an unbounded per-asset residual (no $\tanh$/$\tau$)
+over-tilts and posts negative skill even when the signal is on, and raising the bound
+from $\tau{=}0.15$ to $0.20$ over-churns and lowers net-of-null skill---so the smaller
+bound is kept and the gate is reported alongside it. \emph{Reward baselining}:
+rewarding raw net log return instead of the base-differenced reward lets the agent
+book the structural growth as if it were skill, which would defeat the measurement;
+the difference reward is what makes the zero-skill floor free. \emph{Attribution
+units}: without the gradient$\times$std rescaling and the shared per-feature basis, the
+saliency--causal comparison is dominated by the signal feature's raw scale and reads as
+spurious unfaithfulness (\S\ref{sec:probe}). Each of these, left unfixed, would have
+produced a different and wrong verdict.
 
 \begin{figure}[t]
   \centering
