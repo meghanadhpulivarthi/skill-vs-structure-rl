@@ -2,6 +2,53 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-20 — RQ3 TILT-AGENT VERDICT: attribution stays faithful per-feature; SHAP over-credits the salient signal; group-premise is cardinality-confounded
+
+**Result (LSF job 1130878, 5 tilt agents @ signal 0.95 on multi_regime; safe-block-weight object;
+`src/rq3_faithfulness.py::run_tilt_experiment`; outputs/2026-07-20_05-22-16_rq3-faithfulness-tilt/).**
+
+**Premise-as-coded FAILED but for an illuminating reason (cardinality, not mechanism).**
+`signal_is_causal_driver_fraction = 0.0` — the `signal` is never the top causal GROUP. BUT the
+signal is a SINGLE feature with causal group-share 0.32–0.44 (all seeds), while the `returns`
+group's larger total (0.54–0.63) is spread across 100 features (~0.006 each — near the ~1/121
+noise floor). Per-feature, the signal is the dominant driver by ~54× (0.344 vs 0.0063 avg return,
+seed 0). So the tilt agent DOES key on the signal; the group-level "signal top" premise fails only
+because 100 return features out-SUM one signal feature. **Methodological lesson:** the group-level
+top-driver premise gate is confounded by extreme group-cardinality imbalance (1 vs 100); the
+**per-feature Spearman is the robust, cardinality-free faithfulness measure** and should be the
+headline for any wildly-unequal-cardinality obs. (This is the same normalization-doesn't-cancel-
+cardinality property flagged in the gate final review, now biting the premise gate itself.)
+
+**Faithfulness (per-feature Spearman, causal vs attribution):** saliency **+0.999 ± 0.0004**,
+SHAP **+0.88 ± 0.009** (freeze≈permute; near-zero std across seeds). Both strongly faithful;
+saliency essentially perfect. **SHAP over-attributes to the salient signal feature:** it ranks
+`signal` the top group in 4/5 seeds (share 0.48 vs causal 0.34, seed 0) and deflates `returns`
+(0.51 vs causal 0.63), whereas saliency matches causal's top group (`returns`) in 5/5 and its full
+ranking almost exactly. So relative to the causal ground truth, **saliency is faithful; SHAP is
+less faithful and biased toward the high-variance, semantically-salient signal feature.**
+
+**INVERSION vs the gate result.** Gate (2026-07-20): SHAP was the RELIABLE one (named signal top
+5/5), saliency missed once; Spearman saliency 0.79 / SHAP 0.61. Tilt: saliency near-perfect
+(0.999), SHAP lower (0.88) and salience-biased. **Which attribution method is faithful is
+AGENT-DEPENDENT.** The recurring SHAP failure mode is over-crediting a salient high-variance
+single feature; saliency (local grad×std) tracks the actual per-feature sensitivity more robustly.
+Notably the tilt per-feature Spearmans are HIGHER than the gate's — attribution is not less
+faithful for the more expressive agent at the per-feature level; what frays is SHAP's group-level
+top-driver call under salience + cardinality pressure.
+
+**Verdict on H3 (tilt):** attribution remains broadly faithful to the causal mechanism for the
+capable tilt agent (per-feature), EXTENDING the gate's boundary-condition rather than confirming
+the strong "attribution misidentifies the mechanism" hypothesis — with the important qualifier
+that SHAP's *single-top-driver* identification can mislead via salience bias, and that group-level
+verdicts are unreliable under extreme cardinality imbalance. Report per-feature faithfulness.
+
+**Caveats / notes.** (a) `base_weights` group is inert here by construction: under the equal_weight
+base its obs block is a constant 0.2 vector (std≈0 → ~0 importance) — correct, not a finding.
+(b) Per-feature causal/attribution VECTORS were not persisted (only group shares); the per-feature
+dominance is inferred from group shares + cardinality. A paper re-run should save the 121-dim
+vectors to state the per-feature max directly. (c) Clip vs pre-clip caveat carries as before
+(saliency uses the pre-clip mean; causal/SHAP the projected safe-weight) — inert here (~3.9e-5).
+
 ## 2026-07-20 — RQ3/MC2 VERDICT: in this clean setting, post-hoc attribution is LARGELY FAITHFUL
 
 **Result (LSF job 1130750, 5 gate agents @ signal_strength=0.95 on the risky+safe market;

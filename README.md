@@ -161,6 +161,19 @@ more closely.
 > normalized per-feature aggregation, validated on known-answer, feature-swap, and distributed-driver
 > calibration tests.
 
+**And on the harder agent (the expressive tilt).** Repeating the probe on the tilt agent (per-asset
+action, multi-regime market, attributing the safe-block weight) sharpens the picture. Per-feature
+agreement with the causal mechanism stays high — **saliency +0.999, SHAP +0.88** (Spearman, over 5
+seeds) — so attribution remains broadly faithful even for the more capable agent. But the reliable
+method *flips*: here **SHAP over-credits the salient `signal` feature** (naming it the top driver in
+4/5 seeds when the causal analysis spreads importance more broadly), while saliency tracks the causal
+ranking almost exactly — the opposite of the gate case. So *which* post-hoc method to trust is
+**agent-dependent**, and SHAP's recurring failure mode is over-weighting a salient, high-variance
+feature. A methodological caveat also surfaced: with wildly unequal feature-group sizes (100 return
+features vs 1 signal), group-level "top driver" verdicts are cardinality-confounded — the per-feature
+Spearman is the robust measure, and by it the signal is the dominant single feature (~54× the average
+return feature) in every seed.
+
 ## Repository layout
 
 ```
@@ -228,9 +241,12 @@ Every run writes a timestamped folder under `outputs/` with `config.json`,
   post-hoc attribution (KernelSHAP, gradient saliency), adjudicated against the known
   `signal` driver. Verdict: in this clean setting attribution is largely faithful — a
   boundary condition on the attribution-faithfulness critique.
-- **Deferred / future.** Re-run the faithfulness probe where attribution is likelier to
-  fray (the expressive tilt agent; the real-data agent — less concentrated mechanisms), and
-  a write-up pulling MC1 + real RQ1 + RQ3 together.
+- **Plan 5 — tilt-agent faithfulness probe: complete.** The RQ3 probe extended to the
+  expressive tilt agent (attributing the safe-block weight). Attribution stays faithful
+  per-feature (saliency +0.999, SHAP +0.88), but SHAP over-credits the salient signal — the
+  reliable method is agent-dependent.
+- **Deferred / future.** Re-run the probe on the real-data agent (no ground-truth driver — only
+  method agreement adjudicable), and a write-up pulling MC1 + real RQ1 + RQ3 (gate + tilt) together.
 
 ## Notes
 
