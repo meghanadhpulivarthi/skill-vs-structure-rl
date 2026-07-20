@@ -105,6 +105,32 @@ def run_probe(gate_fn, gate_mean_fn, observations, groups, seed: int = 0) -> dic
             "spearman": spearman, "top_group": top_group}
 
 
+def _summarize_across_seeds(per_seed: list) -> dict:
+    """Across-seed faithfulness summary shared by the gate and tilt experiments: fraction of
+    seeds where each method ranks `signal` top (premise from the causal track), plus mean/std
+    per-feature Spearman agreement, plus the interpretation caveats."""
+    def signal_top_fraction(method_key):
+        return float(np.mean([v["top_group"][method_key] == "signal" for v in per_seed]))
+
+    return {
+        "signal_is_causal_driver_fraction": signal_top_fraction("causal_freeze"),
+        "saliency_signal_top_fraction": signal_top_fraction("saliency"),
+        "shap_signal_top_fraction": signal_top_fraction("shap"),
+        "spearman_mean": {k: float(np.mean([v["spearman"][k] for v in per_seed]))
+                          for k in per_seed[0]["spearman"]},
+        "spearman_std": {k: float(np.std([v["spearman"][k] for v in per_seed]))
+                         for k in per_seed[0]["spearman"]},
+        "caveats": [
+            "saliency uses the pre-clip Gaussian mean while causal/SHAP use the clipped/projected "
+            "behavioral object; where the policy is decisive a saliency-vs-causal divergence is not "
+            "necessarily unfaithfulness.",
+            "importances are put on comparable units (saliency=grad x std) and all four methods share "
+            "one aggregation basis (per-feature shares summed per group), so a causal-vs-attribution "
+            "disagreement reflects mechanism, not feature scale or a joint-vs-per-feature basis mismatch.",
+        ],
+    }
+
+
 def run_experiment(config: dict, n_seeds: int) -> dict:
     """Train n_seeds gate agents at the configured signal strength, probe each on
     a held-out market, aggregate the verdict across seeds, and save the run."""
@@ -137,32 +163,7 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
             first_model, first_eval = model, eval_market
         per_seed.append(verdict)
 
-    # Aggregate: fraction of seeds where each method ranks `signal` top, and mean
-    # Spearman per method (computed over ALL seeds — the full experiment).
-    def signal_top_fraction(method_key, block):
-        return float(np.mean([v[block][method_key] == "signal" for v in per_seed]))
-
-    summary = {
-        "signal_is_causal_driver_fraction": signal_top_fraction("causal_freeze", "top_group"),
-        "saliency_signal_top_fraction": signal_top_fraction("saliency", "top_group"),
-        "shap_signal_top_fraction": signal_top_fraction("shap", "top_group"),
-        "spearman_mean": {k: float(np.mean([v["spearman"][k] for v in per_seed]))
-                          for k in per_seed[0]["spearman"]},
-        "spearman_std": {k: float(np.std([v["spearman"][k] for v in per_seed]))
-                         for k in per_seed[0]["spearman"]},
-        "caveats": [
-            "saliency uses the pre-clip Gaussian mean while causal/SHAP use the clipped "
-            "behavioral gate; where the gate is decisive (mean outside [0,1]) saliency "
-            "attributes gradient in a regime the behavior does not express, so a "
-            "saliency-vs-causal divergence there is not necessarily unfaithfulness.",
-            "importances are put on comparable units (saliency=grad x std) and all four "
-            "methods share one aggregation basis (per-feature shares summed per group), so a "
-            "causal-vs-attribution disagreement reflects mechanism, not feature scale or a "
-            "joint-vs-per-feature basis mismatch. Group scores still reflect feature count "
-            "(a group that collectively drives more output scores higher); this is intended, "
-            "not a confound (final review C1/C2).",
-        ],
-    }
+    summary = _summarize_across_seeds(per_seed)
 
     out_dir = (Path(__file__).resolve().parent.parent / "outputs"
                / f"{now.strftime('%Y-%m-%d_%H-%M-%S')}_rq3-faithfulness")
@@ -186,6 +187,63 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
         print(f"wrote {out_dir / 'gate_response_vol_shock.png'}")
     except Exception as exc:
         print(f"WARNING: gate-response figure failed (non-fatal): {exc}")
+    with open(out_dir / "config.json", "w") as f:
+        json.dump({"config": config, "n_seeds": n_seeds}, f, indent=2)
+    with open(out_dir / "results.json", "w") as f:
+        json.dump({"summary": summary, "per_seed": per_seed}, f, indent=2)
+    print(f"Summary: {summary}")
+    print(f"Saved run to: {out_dir}")
+    return {"summary": summary, "per_seed": per_seed, "out_dir": str(out_dir)}
+
+
+TILT_CONFIG = {"base_name": "equal_weight", "window": 20, "cost_bps": 10.0,
+               "action_mode": "tilt", "max_tilt": 0.15, "market": "multi_regime",
+               "n_risky": 3, "n_safe": 2, "total_timesteps": 150_000,
+               "n_steps": 6000, "signal_strength": 0.95}
+
+
+def run_tilt_experiment(config: dict, n_seeds: int) -> dict:
+    """Probe the expressive tilt agent's SAFE-BLOCK WEIGHT (directional de-risking) on the
+    multi-regime market. Same verdict pipeline as run_experiment; different agent + scalar object."""
+    from src.train import train_agent
+    from src.synthetic_market import generate_multi_regime_market
+    from src.interventions import feature_groups_tilt, make_safe_weight_fn
+    from src.attribution import make_safe_weight_mean_fn
+
+    now = datetime.datetime.now()
+    print("=" * 60)
+    print(f"Run started : {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Script      : {__file__} (tilt)")
+    print(f"Config      : {config} | n_seeds={n_seeds}")
+    print("=" * 60)
+
+    n_assets = config["n_risky"] + config["n_safe"]
+    groups = feature_groups_tilt(config["window"], n_assets)
+    base_obs_idx = groups["base_weights"]                       # obs indices of the base block
+    safe_asset_idx = list(range(config["n_risky"], n_assets))   # safe cols in the weight vector
+
+    per_seed = []
+    for seed in range(n_seeds):
+        train_market = generate_multi_regime_market(config["n_risky"], config["n_safe"],
+                                                    config["n_steps"], seed=1000 + seed,
+                                                    signal_strength=config["signal_strength"])
+        model = train_agent(train_market, {**config, "seed": seed})
+        eval_market = generate_multi_regime_market(config["n_risky"], config["n_safe"],
+                                                   config["n_steps"], seed=2000 + seed,
+                                                   signal_strength=config["signal_strength"])
+        observations = rollout_observations(model, eval_market, config)
+        gate_fn = make_safe_weight_fn(model, base_obs_idx, safe_asset_idx, config["max_tilt"])
+        gate_mean_fn = make_safe_weight_mean_fn(model, base_obs_idx, safe_asset_idx, config["max_tilt"])
+        verdict = run_probe(gate_fn, gate_mean_fn, observations, groups, seed=seed)
+        print(f"seed={seed}: causal_top={verdict['top_group']['causal_freeze']} "
+              f"saliency_top={verdict['top_group']['saliency']} "
+              f"shap_top={verdict['top_group']['shap']}", flush=True)
+        per_seed.append(verdict)
+
+    summary = _summarize_across_seeds(per_seed)
+    out_dir = (Path(__file__).resolve().parent.parent / "outputs"
+               / f"{now.strftime('%Y-%m-%d_%H-%M-%S')}_rq3-faithfulness-tilt")
+    out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "config.json", "w") as f:
         json.dump({"config": config, "n_seeds": n_seeds}, f, indent=2)
     with open(out_dir / "results.json", "w") as f:

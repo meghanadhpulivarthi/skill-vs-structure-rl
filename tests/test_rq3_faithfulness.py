@@ -100,6 +100,29 @@ def test_methods_agree_when_driver_is_distributed_across_a_group():
 
 
 from src.rq3_faithfulness import gate_response_to_vol_shock
+from src.interventions import feature_groups_tilt
+
+
+def test_run_probe_on_tilt_groups_identifies_signal_driver():
+    # Signal-only safe-weight policy on the 121-dim tilt obs: the safe weight depends ONLY on
+    # the signal feature (index 120). Both numpy and torch forms express the same policy, so all
+    # four methods must rank the `signal` group top. Exercises the tilt feature groups + run_probe.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return 1.0 / (1.0 + np.exp(-4.0 * obs[:, 120]))
+
+    def gate_mean_fn(obs_tensor):
+        return torch.sigmoid(4.0 * obs_tensor[:, 120])
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(200, 121)).astype(np.float32)
+    groups = feature_groups_tilt(window=20, n_assets=5)
+    verdict = run_probe(gate_fn, gate_mean_fn, obs, groups, seed=0)
+
+    assert verdict["top_group"]["causal_freeze"] == "signal"
+    assert verdict["top_group"]["saliency"] == "signal"
+    assert verdict["top_group"]["shap"] == "signal"
+    assert set(verdict) == {"causal", "attribution", "spearman", "top_group"}
 
 
 def test_vol_shock_response_returns_aligned_gate_trajectories():
