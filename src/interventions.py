@@ -16,7 +16,10 @@ def feature_groups(window: int, n_assets: int) -> dict:
     """Index sets partitioning the gate observation into semantic groups.
 
     Gate obs layout (src/allocation_env.py): [window*n_assets returns | n_assets
-    short_vol | 1 signal]. The `signal` group is the known ground-truth driver.
+    short_vol | 1 signal]. On SYNTHETIC data the `signal` group is the known
+    ground-truth driver; reused unchanged for the REAL-data probe (same layout),
+    where `signal` is instead a causal no-lookahead crisis heuristic with no known
+    true importance (so only method agreement, not faithfulness, is adjudicable there).
     """
     n_returns = window * n_assets
     return {
