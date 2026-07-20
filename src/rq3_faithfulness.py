@@ -16,8 +16,7 @@ from scipy.stats import spearmanr
 
 from src.interventions import (feature_groups, rollout_observations, make_gate_fn,
                                causal_effect)
-from src.attribution import (make_gate_mean_fn, saliency_importance, shap_importance,
-                             aggregate_to_groups)
+from src.attribution import (make_gate_mean_fn, saliency_importance, shap_importance)
 
 # Config — edit these directly
 CONFIG = {"base_name": "equal_weight", "window": 20, "cost_bps": 10.0,
@@ -26,6 +25,20 @@ CONFIG = {"base_name": "equal_weight", "window": 20, "cost_bps": 10.0,
 N_SEEDS = 5
 SHAP_BACKGROUND = 40
 SHAP_EXPLAIN = 60
+
+
+def _normalized_group_shares(per_feature: np.ndarray, groups: dict) -> dict:
+    """Normalize a per-feature importance vector to sum 1 (share of total), then sum
+    the shares within each group. Cardinality-fair: a group of many low-share features
+    scores low; a single high-share feature scores high. All four methods use this same
+    aggregation so causal and attribution group rankings are comparable (final-review C2)."""
+    per_feature = np.abs(np.asarray(per_feature, dtype=float))
+    total = per_feature.sum()
+    if total <= 0.0:
+        # No signal to attribute; report uniform-by-cardinality shares rather than divide by zero.
+        raise ValueError("per-feature importance sums to zero; cannot form shares")
+    shares = per_feature / total
+    return {name: float(shares[indices].sum()) for name, indices in groups.items()}
 
 
 def _per_feature_causal(gate_fn, observations, obs_dim, mode, seed):
@@ -58,27 +71,24 @@ def run_probe(gate_fn, gate_mean_fn, observations, groups, seed: int = 0) -> dic
     observations = np.asarray(observations, dtype=np.float32)
     obs_dim = observations.shape[1]
 
-    causal_group = {
-        mode: {name: causal_effect(gate_fn, observations, idx, mode, seed=seed)
-               for name, idx in groups.items()}
-        for mode in ("freeze", "permute")
-    }
     saliency_vec = saliency_importance(gate_mean_fn, observations)
     shap_vec = shap_importance(gate_fn, observations, n_background=SHAP_BACKGROUND,
                                n_explain=SHAP_EXPLAIN, seed=seed)
+
+    causal_vecs = {mode: _per_feature_causal(gate_fn, observations, obs_dim, mode, seed)
+                   for mode in ("freeze", "permute")}
+
+    causal_group = {mode: _normalized_group_shares(causal_vecs[mode], groups)
+                    for mode in ("freeze", "permute")}
     attribution_group = {
-        "saliency": aggregate_to_groups(saliency_vec, groups),
-        "shap": aggregate_to_groups(shap_vec, groups),
+        "saliency": _normalized_group_shares(saliency_vec, groups),
+        "shap": _normalized_group_shares(shap_vec, groups),
     }
 
-    # per-feature Spearman agreement between causal effect and attribution
     spearman = {}
     for mode in ("freeze", "permute"):
-        causal_vec = _per_feature_causal(gate_fn, observations, obs_dim, mode, seed)
         for attr_name, attr_vec in (("saliency", saliency_vec), ("shap", shap_vec)):
-            rho, _ = spearmanr(causal_vec, attr_vec)
-            # spearmanr returns nan if a vector is constant; report 0.0 (no monotone
-            # agreement detectable) rather than letting nan flow downstream.
+            rho, _ = spearmanr(causal_vecs[mode], attr_vec)
             spearman[f"{attr_name}_{mode}"] = float(rho) if np.isfinite(rho) else 0.0
 
     top_group = {
@@ -136,6 +146,15 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
                           for k in per_seed[0]["spearman"]},
         "spearman_std": {k: float(np.std([v["spearman"][k] for v in per_seed]))
                          for k in per_seed[0]["spearman"]},
+        "caveats": [
+            "saliency uses the pre-clip Gaussian mean while causal/SHAP use the clipped "
+            "behavioral gate; where the gate is decisive (mean outside [0,1]) saliency "
+            "attributes gradient in a regime the behavior does not express, so a "
+            "saliency-vs-causal divergence there is not necessarily unfaithfulness.",
+            "importances are put on comparable units (saliency=grad x std; groups=normalized "
+            "per-feature shares) so cross-method rankings reflect mechanism, not feature scale "
+            "or group cardinality (final review C1/C2).",
+        ],
     }
 
     out_dir = (Path(__file__).resolve().parent.parent / "outputs"

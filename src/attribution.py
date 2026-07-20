@@ -23,14 +23,22 @@ def make_gate_mean_fn(model):
 
 
 def saliency_importance(gate_mean_fn, observations: np.ndarray) -> np.ndarray:
-    """Per-feature gradient saliency: mean_t |d gate / d obs_i| over the stack."""
-    obs_tensor = torch.as_tensor(np.asarray(observations, dtype=np.float32))
+    """Per-feature saliency in gradient x feature-std units: mean_t |d gate / d obs_i|
+    scaled by the feature's standard deviation over the stack. Scaling by std puts
+    saliency in the SAME 'sensitivity per realistic (1-std) move' units as KernelSHAP
+    and freeze-ablation, so the causal-vs-attribution comparison is apples-to-apples
+    (raw |grad| is scale-invariant and would not be comparable to the scale-sensitive
+    causal/SHAP tracks). See docs/design_2026-07-19_mc2-causal-probing.md and the final
+    review."""
+    observations = np.asarray(observations, dtype=np.float32)
+    obs_tensor = torch.as_tensor(observations)
     obs_tensor.requires_grad_(True)
     gate = gate_mean_fn(obs_tensor)
-    # Rows are independent, so grad of the sum w.r.t. row i equals grad of gate_i.
     gate.sum().backward()
     grads = obs_tensor.grad.detach().numpy()
-    return np.mean(np.abs(grads), axis=0)
+    mean_abs_grad = np.mean(np.abs(grads), axis=0)
+    feature_std = observations.std(axis=0)
+    return mean_abs_grad * feature_std
 
 
 def shap_importance(gate_fn, observations, n_background: int = 40,

@@ -1,4 +1,5 @@
 # tests/test_rq3_faithfulness.py
+import pytest
 import numpy as np
 import torch
 from src.rq3_faithfulness import run_probe
@@ -32,6 +33,39 @@ def test_run_probe_identifies_signal_as_causal_driver_and_emits_verdict():
                                         "shap_freeze", "shap_permute"}
     for rho in verdict["spearman"].values():
         assert -1.0 <= rho <= 1.0
+
+
+@pytest.mark.parametrize("driver_index,expected_group", [
+    (0, "returns"),    # a return feature
+    (40, "short_vol"), # a vol feature
+    (42, "signal"),    # the signal
+])
+def test_all_methods_follow_the_true_single_feature_driver(driver_index, expected_group):
+    # A gate that depends ONLY on feature `driver_index`. After the scale (grad x std)
+    # and cardinality (normalized shares) fixes, every method must rank the group that
+    # CONTAINS the true driver as top — regardless of that feature's raw scale or how
+    # many features its group has. Inputs deliberately have UNEQUAL per-column scale so
+    # this exercises the scale regime the old equal-variance tests missed.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return 1.0 / (1.0 + np.exp(-4.0 * obs[:, driver_index]))
+
+    def gate_mean_fn(obs_tensor):
+        return torch.sigmoid(4.0 * obs_tensor[:, driver_index])
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(size=(200, 43)).astype(np.float32)
+    # impose unequal column scales, incl. a large-scale signal like the real market
+    scales = np.ones(43, dtype=np.float32) * 0.01
+    scales[42] = 0.35
+    obs = obs * scales
+    groups = feature_groups(window=20, n_assets=2)
+    verdict = run_probe(gate_fn, gate_mean_fn, obs, groups, seed=0)
+
+    assert verdict["top_group"]["causal_freeze"] == expected_group
+    assert verdict["top_group"]["causal_permute"] == expected_group
+    assert verdict["top_group"]["saliency"] == expected_group
+    assert verdict["top_group"]["shap"] == expected_group
 
 
 from src.rq3_faithfulness import gate_response_to_vol_shock

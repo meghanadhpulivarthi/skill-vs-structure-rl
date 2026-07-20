@@ -51,6 +51,23 @@ def test_shap_ranks_features_by_weight_on_linear_policy():
     assert importance[10] < importance[20]       # inert below the small-weight feature
 
 
+def test_saliency_uses_gradient_times_std_units():
+    # feature 5 has large weight; feature 20 has small weight but LARGE input scale.
+    # In gradient x std units, importance ~ |w_i| * std_i. Verify both contribute and
+    # that a zero-weight feature stays ~0 regardless of its input scale.
+    weights = np.zeros(43, dtype=np.float32); weights[5] = 3.0; weights[20] = 0.5
+    w = torch.tensor(weights)
+    def linear_gate_mean(obs_tensor):
+        return torch.sigmoid(obs_tensor @ w)
+    rng = np.random.default_rng(0)
+    obs = rng.normal(size=(300, 43)).astype(np.float32)
+    obs[:, 20] *= 10.0   # feature 20 has 10x input scale but small weight; feature 10 stays inert
+    importance = saliency_importance(linear_gate_mean, obs)
+    assert importance.shape == (43,)
+    assert importance[10] < 1e-6                    # inert weight -> ~0 even if scaled
+    assert importance[5] > 0 and importance[20] > 0 # both contribute in grad x std units
+
+
 def test_aggregate_to_groups_sums_absolute_importance():
     importance = np.zeros(43)
     importance[0:40] = 0.01     # returns block sums to 0.4
