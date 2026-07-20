@@ -196,6 +196,8 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
     return {"summary": summary, "per_seed": per_seed, "out_dir": str(out_dir)}
 
 
+# "market" here is documentation-only: run_tilt_experiment calls generate_multi_regime_market
+# directly (build_env/train_agent do not read config["market"]). It is NOT a dispatch switch.
 TILT_CONFIG = {"base_name": "equal_weight", "window": 20, "cost_bps": 10.0,
                "action_mode": "tilt", "max_tilt": 0.15, "market": "multi_regime",
                "n_risky": 3, "n_safe": 2, "total_timesteps": 150_000,
