@@ -1,0 +1,171 @@
+% references.bib — ICAIF '26 short paper: skill vs. structure in RL portfolio allocation.
+% All entries verified via web search (title/authors/year/venue + arXiv/DOI) on 2026-07-20.
+% Only solidly-verified, directly-cited references are kept; flagged/unconfirmed candidates
+% from the literature trail were deliberately dropped rather than risk a fabricated citation.
+
+% ---------- RL portfolio allocation & the skill-vs-structure debate ----------
+
+@techreport{lavko2023,
+  author      = {Lavko, Matus and Klein, Tony and Walther, Thomas},
+  title       = {Reinforcement Learning and Portfolio Allocation: Challenging Traditional Allocation Methods},
+  institution = {Queen's Management School, Queen's University Belfast},
+  type        = {Working Paper},
+  number      = {QMS-RP2023-01},
+  year        = {2023},
+  note        = {SSRN 4346043}
+}
+
+@article{demiguel2009,
+  author  = {DeMiguel, Victor and Garlappi, Lorenzo and Uppal, Raman},
+  title   = {Optimal Versus Naive Diversification: How Inefficient is the 1/N Portfolio Strategy?},
+  journal = {The Review of Financial Studies},
+  volume  = {22},
+  number  = {5},
+  pages   = {1915--1953},
+  year    = {2009},
+  doi     = {10.1093/rfs/hhm075}
+}
+
+@article{kruthof2025,
+  author  = {Kruthof, Garvin and M\"{u}ller, Sebastian},
+  title   = {Can deep reinforcement learning beat 1/N?},
+  journal = {Finance Research Letters},
+  volume  = {75},
+  pages   = {106866},
+  year    = {2025},
+  doi     = {10.1016/j.frl.2025.106866}
+}
+
+@article{delarica2025,
+  author  = {de la Rica Escudero, Alejandra and Garrido-Merch\'{a}n, Eduardo C. and Coronado-Vaca, Mar\'{i}a},
+  title   = {Explainable post hoc portfolio management financial policy of a Deep Reinforcement Learning agent},
+  journal = {PLoS ONE},
+  volume  = {20},
+  number  = {1},
+  pages   = {e0315528},
+  year    = {2025},
+  doi     = {10.1371/journal.pone.0315528}
+}
+
+@article{cong2021alphaportfolio,
+  author  = {Cong, Lin William and Tang, Ke and Wang, Jingyuan and Zhang, Yang},
+  title   = {{AlphaPortfolio}: Direct Construction Through Deep Reinforcement Learning and Interpretable {AI}},
+  journal = {Working paper, SSRN 3554486},
+  year    = {2021}
+}
+
+@article{zhang2020dlportfolio,
+  author  = {Zhang, Zihao and Zohren, Stefan and Roberts, Stephen},
+  title   = {Deep Learning for Portfolio Optimization},
+  journal = {The Journal of Financial Data Science},
+  volume  = {2},
+  number  = {4},
+  pages   = {8--20},
+  year    = {2020},
+  doi     = {10.3905/jfds.2020.1.042}
+}
+
+% ---------- Stochastic Portfolio Theory / rebalancing premium / risk heuristics ----------
+
+@book{fernholz2002,
+  author    = {Fernholz, E. Robert},
+  title     = {Stochastic Portfolio Theory},
+  series    = {Stochastic Modelling and Applied Probability},
+  volume    = {48},
+  publisher = {Springer New York},
+  year      = {2002},
+  doi       = {10.1007/978-1-4757-3699-1}
+}
+
+@article{maillard2010,
+  author  = {Maillard, S\'{e}bastien and Roncalli, Thierry and Te\"{i}letche, J\'{e}r\^{o}me},
+  title   = {The Properties of Equally Weighted Risk Contribution Portfolios},
+  journal = {The Journal of Portfolio Management},
+  volume  = {36},
+  number  = {4},
+  pages   = {60--70},
+  year    = {2010},
+  doi     = {10.3905/jpm.2010.36.4.060}
+}
+
+@article{moreira2017,
+  author  = {Moreira, Alan and Muir, Tyler},
+  title   = {Volatility-Managed Portfolios},
+  journal = {The Journal of Finance},
+  volume  = {72},
+  number  = {4},
+  pages   = {1611--1644},
+  year    = {2017},
+  doi     = {10.1111/jofi.12513}
+}
+
+% ---------- Residual policy learning (robotics ancestors) ----------
+
+@article{silver2018,
+  author        = {Silver, Tom and Allen, Kelsey and Tenenbaum, Josh and Kaelbling, Leslie},
+  title         = {Residual Policy Learning},
+  journal       = {arXiv preprint arXiv:1812.06298},
+  year          = {2018}
+}
+
+@inproceedings{johannink2019,
+  author    = {Johannink, Tobias and Bahl, Shikhar and Nair, Ashvin and Luo, Jianlan and Kumar, Avinash and Loskyll, Matthias and Ojea, Juan Aparicio and Solowjow, Eugen and Levine, Sergey},
+  title     = {Residual Reinforcement Learning for Robot Control},
+  booktitle = {2019 International Conference on Robotics and Automation (ICRA)},
+  pages     = {6023--6029},
+  year      = {2019},
+  publisher = {IEEE},
+  doi       = {10.1109/ICRA.2019.8794127}
+}
+
+% ---------- Explainability / saliency ----------
+
+@inproceedings{lundberg2017,
+  author    = {Lundberg, Scott M. and Lee, Su-In},
+  title     = {A Unified Approach to Interpreting Model Predictions},
+  booktitle = {Advances in Neural Information Processing Systems 30 (NeurIPS)},
+  pages     = {4765--4774},
+  year      = {2017}
+}
+
+@inproceedings{simonyan2014,
+  author    = {Simonyan, Karen and Vedaldi, Andrea and Zisserman, Andrew},
+  title     = {Deep Inside Convolutional Networks: Visualising Image Classification Models and Saliency Maps},
+  booktitle = {Workshop Track, 2nd International Conference on Learning Representations (ICLR)},
+  year      = {2014}
+}
+
+@inproceedings{atrey2020,
+  author    = {Atrey, Akanksha and Clary, Kaleigh and Jensen, David},
+  title     = {Exploratory Not Explanatory: Counterfactual Analysis of Saliency Maps for Deep Reinforcement Learning},
+  booktitle = {8th International Conference on Learning Representations (ICLR)},
+  year      = {2020}
+}
+
+% ---------- Algorithms & tooling ----------
+
+@article{schulman2017,
+  author  = {Schulman, John and Wolski, Filip and Dhariwal, Prafulla and Radford, Alec and Klimov, Oleg},
+  title   = {Proximal Policy Optimization Algorithms},
+  journal = {arXiv preprint arXiv:1707.06347},
+  year    = {2017}
+}
+
+@article{raffin2021,
+  author  = {Raffin, Antonin and Hill, Ashley and Gleave, Adam and Kanervisto, Anssi and Ernestus, Maximilian and Dormann, Noah},
+  title   = {Stable-Baselines3: Reliable Reinforcement Learning Implementations},
+  journal = {Journal of Machine Learning Research},
+  volume  = {22},
+  number  = {268},
+  pages   = {1--8},
+  year    = {2021}
+}
+
+@inproceedings{duchi2008,
+  author    = {Duchi, John and Shalev-Shwartz, Shai and Singer, Yoram and Chandra, Tushar},
+  title     = {Efficient Projections onto the $\ell_1$-Ball for Learning in High Dimensions},
+  booktitle = {Proceedings of the 25th International Conference on Machine Learning (ICML)},
+  pages     = {272--279},
+  year      = {2008},
+  doi       = {10.1145/1390156.1390191}
+}
