@@ -174,6 +174,23 @@ features vs 1 signal), group-level "top driver" verdicts are cardinality-confoun
 Spearman is the robust measure, and by it the signal is the dominant single feature (~54× the average
 return feature) in every seed.
 
+**And on the real agent (no ground truth — a transfer check).** Repeating the probe on the real-data
+gate agent (RQ1's risk-parity config, full ETF panel) tests whether the synthetic method-agreement
+survives outside the lab. Two honest reframings apply: there is no ground-truth driver on real data,
+so only **method agreement** (causal ablation vs. attribution) is adjudicable, not faithfulness; and
+the verdict is read together with **activity diagnostics** that make agent inactivity visible. Those
+diagnostics overturned our own prior: RQ1's mean gate ≈ 0.04 *looks* like a do-nothing agent, but the
+gate **standard deviation ≈ 0.18** shows it actively swings — periodically de-risking hard, then
+returning to base. So the real agent has a genuine, active decision mechanism; it is simply an
+*unprofitable* one (RQ1: no skill after costs). Given that live mechanism, agreement is strong and
+preserves the synthetic ordering: per-feature Spearman with causal ablation is **saliency +0.996,
+SHAP +0.79** (5 seeds). All four methods agree the agent reads the recent-**returns** block (~0.96 of
+the normalized share), with the crisis signal a minor contributor — and unlike the synthetic tilt this
+is not a cardinality artifact (the signal is only ~3× an average return feature here, vs ~54×). So the
+real RL allocator has a coherent, attributable decision rule that post-hoc explanation (saliency
+especially) reads faithfully — the rule just isn't skillful. Caveat: agreement without an oracle can't
+prove faithfulness, and per-feature vectors weren't persisted (a paper re-run should save them).
+
 ## Repository layout
 
 ```
@@ -245,8 +262,12 @@ Every run writes a timestamped folder under `outputs/` with `config.json`,
   expressive tilt agent (attributing the safe-block weight). Attribution stays faithful
   per-feature (saliency +0.999, SHAP +0.88), but SHAP over-credits the salient signal — the
   reliable method is agent-dependent.
-- **Deferred / future.** Re-run the probe on the real-data agent (no ground-truth driver — only
-  method agreement adjudicable), and a write-up pulling MC1 + real RQ1 + RQ3 (gate + tilt) together.
+- **Plan 6 — real-data faithfulness probe: complete.** The RQ3 probe on the real-data gate agent,
+  with activity diagnostics. No ground truth, so it measures method agreement, not faithfulness; the
+  diagnostics revealed the agent is *active* (gate std ≈ 0.18), not the do-nothing it appears from its
+  mean. Saliency +0.996 / SHAP +0.79 per-feature agreement with causal — the synthetic ordering
+  transfers; the real agent's (unprofitable) rule reads the return block, faithfully attributed.
+- **Deferred / future.** A write-up pulling MC1 + real RQ1 + RQ3 (gate + tilt + real) together.
 
 ## Notes
 
