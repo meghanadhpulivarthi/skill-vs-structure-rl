@@ -25,6 +25,22 @@ def feature_groups(window: int, n_assets: int) -> dict:
     }
 
 
+def feature_groups_tilt(window: int, n_assets: int) -> dict:
+    """Semantic index groups for the TILT observation (src/allocation_env.py tilt mode):
+    [window*n returns | n short_vol | n long_vol | n momentum | n base_weights | 1 signal].
+    The `signal` group is the known ground-truth driver."""
+    n_returns = window * n_assets
+    offset = n_returns
+    return {
+        "returns": list(range(0, n_returns)),
+        "short_vol": list(range(offset, offset + n_assets)),
+        "long_vol": list(range(offset + n_assets, offset + 2 * n_assets)),
+        "momentum": list(range(offset + 2 * n_assets, offset + 3 * n_assets)),
+        "base_weights": list(range(offset + 3 * n_assets, offset + 4 * n_assets)),
+        "signal": [offset + 4 * n_assets],
+    }
+
+
 def rollout_observations(model, market: dict, config: dict) -> np.ndarray:
     """Replay the deterministic policy; return the observations that drove each
     decision (shape [T, obs_dim]). The terminal all-zeros obs is excluded because

@@ -63,3 +63,17 @@ def aggregate_to_groups(importance: np.ndarray, groups: dict) -> dict:
     """Sum |importance| within each semantic feature group."""
     importance = np.asarray(importance, dtype=float)
     return {name: float(np.abs(importance[indices]).sum()) for name, indices in groups.items()}
+
+
+def project_to_simplex_torch(v: torch.Tensor) -> torch.Tensor:
+    """Batched, differentiable Euclidean projection onto the probability simplex
+    (Duchi et al. 2008), mirroring src/simplex.project_to_simplex so the tilt->weights
+    map can be backpropagated for saliency. v: [B, n] -> [B, n]."""
+    n = v.shape[1]
+    u, _ = torch.sort(v, descending=True, dim=1)
+    cssv = torch.cumsum(u, dim=1) - 1.0
+    ind = torch.arange(1, n + 1, dtype=v.dtype, device=v.device)
+    cond = (u - cssv / ind) > 0
+    rho = cond.sum(dim=1, keepdim=True)                       # count of positive terms, >=1
+    theta = torch.gather(cssv, 1, (rho - 1).clamp(min=0)) / rho.to(v.dtype)
+    return torch.clamp(v - theta, min=0.0)

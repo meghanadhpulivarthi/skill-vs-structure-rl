@@ -78,3 +78,26 @@ def test_aggregate_to_groups_sums_absolute_importance():
     assert np.isclose(agg["returns"], 0.4)
     assert np.isclose(agg["short_vol"], 1.0)
     assert np.isclose(agg["signal"], 2.0)
+
+
+from src.attribution import project_to_simplex_torch
+from src.simplex import project_to_simplex
+
+
+def test_torch_simplex_projection_matches_numpy_and_is_on_simplex():
+    rng = np.random.default_rng(0)
+    v = rng.normal(size=(8, 5)).astype(np.float32)
+    out = project_to_simplex_torch(torch.as_tensor(v)).detach().numpy()
+    # matches the numpy Duchi projection row-by-row
+    for i in range(len(v)):
+        assert np.allclose(out[i], project_to_simplex(v[i]), atol=1e-5)
+    # lies on the probability simplex
+    assert np.allclose(out.sum(axis=1), 1.0, atol=1e-5)
+    assert (out >= -1e-6).all()
+
+
+def test_torch_simplex_projection_is_differentiable():
+    v = torch.tensor([[0.2, 0.5, 0.1, 0.1, 0.1]], requires_grad=True)
+    w = project_to_simplex_torch(v)
+    w[:, 3:].sum().backward()          # gradient of safe-weight wrt inputs
+    assert v.grad is not None and torch.isfinite(v.grad).all()

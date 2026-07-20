@@ -1,5 +1,5 @@
 import numpy as np
-from src.interventions import feature_groups, rollout_observations, make_gate_fn, freeze_group, permute_group, causal_effect, inject_vol_shock, flip_signal
+from src.interventions import feature_groups, rollout_observations, make_gate_fn, freeze_group, permute_group, causal_effect, inject_vol_shock, flip_signal, feature_groups_tilt
 
 
 def test_feature_groups_partition_the_obs_vector():
@@ -89,3 +89,15 @@ def test_flip_signal_sets_one_step_without_mutating():
     assert np.allclose(market["signal"], original_signal)   # input untouched
     assert flipped["signal"][150] == 1.0
     assert np.allclose(np.delete(flipped["signal"], 150), np.delete(original_signal, 150))
+
+
+def test_feature_groups_tilt_partitions_the_121_dim_obs():
+    groups = feature_groups_tilt(window=20, n_assets=5)
+    assert groups["returns"] == list(range(0, 100))
+    assert groups["short_vol"] == [100, 101, 102, 103, 104]
+    assert groups["long_vol"] == [105, 106, 107, 108, 109]
+    assert groups["momentum"] == [110, 111, 112, 113, 114]
+    assert groups["base_weights"] == [115, 116, 117, 118, 119]
+    assert groups["signal"] == [120]
+    all_idx = sum(groups.values(), [])
+    assert sorted(all_idx) == list(range(121))
