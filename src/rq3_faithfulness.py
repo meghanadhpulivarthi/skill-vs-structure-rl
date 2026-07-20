@@ -29,9 +29,13 @@ SHAP_EXPLAIN = 60
 
 def _normalized_group_shares(per_feature: np.ndarray, groups: dict) -> dict:
     """Normalize a per-feature importance vector to sum 1 (share of total), then sum
-    the shares within each group. Cardinality-fair: a group of many low-share features
-    scores low; a single high-share feature scores high. All four methods use this same
-    aggregation so causal and attribution group rankings are comparable (final-review C2)."""
+    the shares within each group. Normalization does NOT remove a group's feature-count
+    advantage (it is a monotone rescale; the argmax group is unchanged) — a group that
+    collectively drives more output legitimately scores higher. Its purpose is to put all
+    four methods on ONE comparable scale (each sums to 1). The cardinality artifact was
+    fixed separately, by computing the causal group verdict from the SAME per-feature
+    vector the attribution methods use (see run_probe) instead of the old joint-group
+    ablation, so causal and attribution share one basis (final-review C2)."""
     per_feature = np.abs(np.asarray(per_feature, dtype=float))
     total = per_feature.sum()
     if total <= 0.0:
@@ -151,9 +155,12 @@ def run_experiment(config: dict, n_seeds: int) -> dict:
             "behavioral gate; where the gate is decisive (mean outside [0,1]) saliency "
             "attributes gradient in a regime the behavior does not express, so a "
             "saliency-vs-causal divergence there is not necessarily unfaithfulness.",
-            "importances are put on comparable units (saliency=grad x std; groups=normalized "
-            "per-feature shares) so cross-method rankings reflect mechanism, not feature scale "
-            "or group cardinality (final review C1/C2).",
+            "importances are put on comparable units (saliency=grad x std) and all four "
+            "methods share one aggregation basis (per-feature shares summed per group), so a "
+            "causal-vs-attribution disagreement reflects mechanism, not feature scale or a "
+            "joint-vs-per-feature basis mismatch. Group scores still reflect feature count "
+            "(a group that collectively drives more output scores higher); this is intended, "
+            "not a confound (final review C1/C2).",
         ],
     }
 
