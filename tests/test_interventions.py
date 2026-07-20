@@ -101,3 +101,41 @@ def test_feature_groups_tilt_partitions_the_121_dim_obs():
     assert groups["signal"] == [120]
     all_idx = sum(groups.values(), [])
     assert sorted(all_idx) == list(range(121))
+
+
+from src.interventions import make_safe_weight_fn
+from src.simplex import project_to_simplex
+
+
+class _ConstTiltModel:
+    # returns a fixed 5-dim action regardless of obs
+    def __init__(self, action):
+        self._action = np.asarray(action, dtype=float)
+    def predict(self, obs, deterministic=True):
+        obs = np.atleast_2d(np.asarray(obs, dtype=np.float32))
+        return np.tile(self._action, (len(obs), 1)), None
+
+
+def test_safe_weight_fn_matches_hand_computed_projection():
+    n_assets = 5
+    max_tilt = 0.15
+    base_obs_idx = [115, 116, 117, 118, 119]
+    safe_asset_idx = [3, 4]
+    action = np.array([2.0, -1.0, 0.5, 1.5, -0.5])
+    model = _ConstTiltModel(action)
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(size=(6, 121)).astype(np.float32)
+    # put a valid equal-weight base into the base_weights block
+    obs[:, base_obs_idx] = 1.0 / n_assets
+
+    fn = make_safe_weight_fn(model, base_obs_idx, safe_asset_idx, max_tilt)
+    got = fn(obs)
+
+    # hand-compute the expected safe-block weight
+    base = obs[0, base_obs_idx].astype(float)
+    w = project_to_simplex(base + max_tilt * np.tanh(action))
+    expected = w[safe_asset_idx].sum()
+    assert got.shape == (6,)
+    assert np.allclose(got, expected, atol=1e-6)          # constant action -> constant safe weight
+    assert (got >= -1e-9).all() and (got <= 1.0 + 1e-9).all()

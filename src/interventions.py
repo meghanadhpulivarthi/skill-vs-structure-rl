@@ -8,6 +8,7 @@ so they are testable on a known policy and reusable on the real PPO agent.
 """
 import numpy as np
 
+from src.simplex import project_to_simplex
 from src.train import build_env
 
 
@@ -114,3 +115,25 @@ def flip_signal(market: dict, t0: int, value: float) -> dict:
     signal = np.array(market["signal"], dtype=float)     # copy
     signal[t0] = value
     return {**market, "signal": signal}
+
+
+def make_safe_weight_fn(model, base_obs_idx, safe_asset_idx, max_tilt):
+    """Adapter: numpy observation stack -> safe-block weight of the executed tilt portfolio.
+    Reads the base weights from the obs (base_obs_idx), applies the bounded tilt
+    (max_tilt*tanh(action)) and the simplex projection, and sums the safe-asset weights.
+    This is the tilt analog of make_gate_fn (the scalar de-risking behavioral object)."""
+    base_obs_idx = list(base_obs_idx)
+    safe_asset_idx = list(safe_asset_idx)
+
+    def safe_weight_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        actions, _ = model.predict(obs, deterministic=True)
+        actions = np.atleast_2d(np.asarray(actions, dtype=float))
+        base = obs[:, base_obs_idx].astype(float)
+        tilt = max_tilt * np.tanh(actions)
+        out = np.empty(len(obs), dtype=float)
+        for i in range(len(obs)):
+            weights = project_to_simplex(base[i] + tilt[i])
+            out[i] = float(weights[safe_asset_idx].sum())
+        return out
+    return safe_weight_fn

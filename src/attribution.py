@@ -79,3 +79,19 @@ def project_to_simplex_torch(v: torch.Tensor) -> torch.Tensor:
     rho = cond.sum(dim=1, keepdim=True)                       # count of positive terms, >=1
     theta = torch.gather(cssv, 1, (rho - 1).clamp(min=0)) / rho.to(v.dtype)
     return torch.clamp(v - theta, min=0.0)
+
+
+def make_safe_weight_mean_fn(model, base_obs_idx, safe_asset_idx, max_tilt):
+    """Differentiable adapter: obs tensor -> safe-block weight via the tilt policy's
+    Gaussian-mean action (PRE-clip, consistent with make_gate_mean_fn), the bounded tilt,
+    and the differentiable simplex projection. Used by saliency_importance for the tilt agent."""
+    base_obs_idx = torch.as_tensor(list(base_obs_idx), dtype=torch.long)
+    safe_asset_idx = torch.as_tensor(list(safe_asset_idx), dtype=torch.long)
+
+    def safe_weight_mean_fn(obs_tensor: torch.Tensor) -> torch.Tensor:
+        mean_action = model.policy.get_distribution(obs_tensor).distribution.mean   # [B, n_assets]
+        base = obs_tensor[:, base_obs_idx]
+        tilt = max_tilt * torch.tanh(mean_action)
+        weights = project_to_simplex_torch(base + tilt)
+        return weights[:, safe_asset_idx].sum(dim=1)
+    return safe_weight_mean_fn
