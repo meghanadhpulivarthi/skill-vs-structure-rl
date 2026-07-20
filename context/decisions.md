@@ -2,6 +2,46 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-20 — RQ3/MC2 VERDICT: in this clean setting, post-hoc attribution is LARGELY FAITHFUL
+
+**Result (LSF job 1130750, 5 gate agents @ signal_strength=0.95 on the risky+safe market;
+`src/rq3_faithfulness.py`; outputs/2026-07-20_04-30-45_rq3-faithfulness/):**
+
+- **Premise (causal ground truth): 100%.** In all 5 seeds the `signal` feature is the top
+  CAUSAL driver of de-risking (per-feature freeze/permute ablation) — the agents genuinely
+  time off the signal, so faithfulness IS adjudicable.
+- **SHAP identifies the true driver in 5/5 seeds** (signal-group share 0.77–1.00, matching the
+  causal share). **Saliency in 4/5.** The one saliency miss is seed 0 — which is ALSO the seed
+  where the agent's mechanism is least concentrated (causal signal share 0.54 vs ~1.0 for the
+  other four). So attribution's reliability degrades exactly where the true mechanism is more
+  distributed — a coherent, non-random failure mode.
+- **Per-feature Spearman agreement (causal vs attribution), mean±std over seeds:** saliency
+  +0.79±0.27, SHAP +0.61±0.31 (freeze≈permute). Both positive; notable INVERSION — saliency
+  tracks the full per-feature causal profile better, while SHAP is the more reliable at naming
+  the single top driver. The two "standard" methods are not interchangeable.
+
+**Verdict on H3:** the strong hypothesis ("standard attribution MISidentifies the mechanism")
+is **not supported in this controlled, single-mechanism, low-dimensional setting** — attribution
+is largely faithful here. Per the spec (§5), this is an explicitly legitimate, publishable
+BOUNDARY-CONDITION result: it bounds the Atrey/Lu attribution-faithfulness worry rather than
+confirming it, and says *when* attribution can be trusted for RL allocators (clean, concentrated
+mechanism) and where it frays (distributed mechanism → seed-0; high across-seed variance ~0.3).
+
+**Trustworthiness hinges on the confound fix.** The final whole-branch review caught that the
+`signal` feature has ~35–100× the input scale of the return/vol features, and that saliency
+(raw |∂g/∂o|, scale-invariant) was in different units from freeze/SHAP (scale-sensitive), plus a
+40:1 group-cardinality tilt from summed aggregation. Fixed: saliency→grad×std (matched units),
+all four methods→one normalized per-feature aggregation basis. WITHOUT this fix the saliency-vs-
+causal comparison would have been dominated by units and we could have FALSELY concluded
+"attribution is unfaithful." The verdict is only interpretable because the measure was corrected
+and validated on known-answer + feature-swap + distributed-driver calibration tests (Rule 9).
+
+**Caveat carried in results.json:** saliency reads the pre-clip Gaussian mean while causal/SHAP
+read the clipped behavioral gate; where the gate is decisive a saliency-vs-causal divergence is
+not necessarily unfaithfulness. **Future work (deferred):** re-run the probe on the harder cases
+where attribution is more likely to fray — the expressive TILT agent (per-asset, multi-regime)
+and/or the real-data agent — where the mechanism is less clean/concentrated than this gate.
+
 ## 2026-07-19 — RQ1 REAL-DATA VERDICT (TILT): expressive agent adds no skill, and loses MORE than the gate
 
 **Result (LSF array 1123950[1-45], 45/45 done 0 fail; 5 agent seeds + 10 placebo draws per

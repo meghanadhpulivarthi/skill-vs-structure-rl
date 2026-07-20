@@ -10,11 +10,12 @@ that, and applies it as a lens on a live contradiction in the literature (some
 papers credit Sharpe-reward RL allocators with tail-risk reduction; others find
 no such advantage once costs and a strong `1/N` benchmark are in play).
 
-> **Status:** research in progress. **Plans 1 (synthetic RQ2), 2 (real-data RQ1), and
-> 3 (expressive-tilt agent) are complete** — the skill measure is validated, applied to
-> real ETFs, and stress-tested against a far more capable agent, with a robust verdict
-> throughout. Causal mechanism probing (RQ3) is scoped, next. See
-> [`docs/`](docs/) and [`context/`](context/) for the full design and decision trail.
+> **Status:** all planned contributions complete. **Plans 1 (synthetic RQ2), 2 (real-data
+> RQ1), 3 (expressive-tilt agent), and 4 (causal mechanism probing, RQ3) are done** — the
+> skill measure is validated, applied to real ETFs, stress-tested against a far more capable
+> agent, and the trained agent's decision mechanism is causally probed against post-hoc
+> attribution. See [`docs/`](docs/) and [`context/`](context/) for the full design and
+> decision trail.
 
 ---
 
@@ -129,6 +130,37 @@ expressiveness means more churn, and where no timeable structure exists that chu
 cost drag, not edge. A capable agent doesn't rescue the RL allocator — it demonstrates,
 more forcefully, that skill above structure isn't there to be found.
 
+## Key result (RQ3 — is the explanation faithful?)
+
+A separate worry: even when an RL agent *does* have a real mechanism, do standard post-hoc
+explanations (SHAP, gradient saliency) correctly identify it? We probe the trained gate agent on
+synthetic ground truth — where the leading `signal` feature is, by construction, the only genuine
+driver — and compare what *causal interventions* (per-feature ablation) show against what attribution
+claims. Across 5 seeds (`signal_strength = 0.95`):
+
+| | Identifies the true (`signal`) driver | Per-feature agreement with causal (Spearman) |
+| --- | --- | --- |
+| Causal ground truth | 100% of seeds (the premise) | — |
+| KernelSHAP | 100% of seeds | +0.61 ± 0.31 |
+| Gradient saliency | 80% of seeds | +0.79 ± 0.27 |
+
+So in this clean, single-mechanism setting **attribution is largely faithful** — it recovers the true
+driver and correlates positively with causal effect. The strong worry ("attribution misidentifies the
+mechanism") is *not* supported here; this is a **boundary condition** on that critique — it says *when*
+attribution can be trusted for RL allocators. The failure it does show is coherent, not random: the one
+saliency miss is the seed whose agent relies *least* exclusively on the signal (causal signal-share 0.54
+vs ~1.0), i.e. reliability frays as the mechanism becomes more distributed. SHAP and saliency also trade
+off — SHAP is more reliable at naming the single top driver, saliency tracks the full per-feature profile
+more closely.
+
+> **Why this verdict is trustworthy.** The measure was corrected for a subtle confound before use: the
+> `signal` feature has ~35–100× the scale of the return/volatility features, and raw gradient saliency is
+> scale-invariant while SHAP and ablation are scale-sensitive. Left unfixed, the causal-vs-attribution
+> comparison would have been dominated by units, not mechanism — and could have *falsely* read as
+> "attribution is unfaithful." Saliency is reported in gradient×std units and all methods share one
+> normalized per-feature aggregation, validated on known-answer, feature-swap, and distributed-driver
+> calibration tests.
+
 ## Repository layout
 
 ```
@@ -146,7 +178,10 @@ src/
   walk_forward.py       # anchored expanding-window walk-forward, per-fold retrain, OOS stitching
   placebo.py            # phase-randomization null (real-data overfitting/luck baseline)
   rq1_real_data.py      # RQ1 experiment: skill net of null + metrics table + figures
-scripts/                # LSF drivers: parallel RQ1 run + robustness sweep (array job)
+  interventions.py      # RQ3 causal track: replay, feature-group ablation, env interventions
+  attribution.py        # RQ3 attribution track: gradient saliency + KernelSHAP (grad x std units)
+  rq3_faithfulness.py   # RQ3 experiment: causal vs attribution faithfulness verdict
+scripts/                # LSF drivers: parallel RQ1 run + robustness sweep (array job) + RQ3 experiment
 tests/                  # unit + ground-truth tests (incl. the RQ2 validity gate)
 docs/                   # design spec + implementation plans
 context/                # decision trail: scoping, novelty checks, decisions, open questions
@@ -188,9 +223,14 @@ Every run writes a timestamped folder under `outputs/` with `config.json`,
   tilt with enriched causal features, validated on synthetic ground truth (net-of-null)
   and swept on real ETFs. Verdict holds: the capable agent adds no skill above structure
   and over-churns *more* than the gate on real markets.
-- **Plan 4 — causal mechanism probing (RQ3): scoped, next.** Interventions (volatility
-  shocks, regime flips, feature freezes) on the trained agent to test whether standard
-  attribution (SHAP/saliency) identifies the true mechanism.
+- **Plan 4 — causal mechanism probing (RQ3): complete.** Interventions (feature-group
+  freeze/permute ablation, volatility shocks, signal flips) on the trained gate agent vs.
+  post-hoc attribution (KernelSHAP, gradient saliency), adjudicated against the known
+  `signal` driver. Verdict: in this clean setting attribution is largely faithful — a
+  boundary condition on the attribution-faithfulness critique.
+- **Deferred / future.** Re-run the faithfulness probe where attribution is likelier to
+  fray (the expressive tilt agent; the real-data agent — less concentrated mechanisms), and
+  a write-up pulling MC1 + real RQ1 + RQ3 together.
 
 ## Notes
 
