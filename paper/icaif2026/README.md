@@ -24,8 +24,19 @@ delete everything from the `\appendix` line to `\end{document}`, then confirm th
 matter is ≤ 8 pages. The main body does not depend on the appendix.
 
 ## Files
-- `paper.tex` — the manuscript (`sigconf,anonymous,review`), main body + appendix.
-- `references.bib` — 17 verified references (only solidly-verified entries kept).
+- **`paper_icaif.tex` — the ICAIF submission cut.** Main body only, no appendix,
+  no cross-references into an appendix. This is the file to submit. Estimated ~5
+  pages compiled (I could not compile here; see below), i.e. safely under the
+  8-page cap with headroom to expand if you want a fuller submission.
+- **`paper.tex` — the extended (arXiv) version.** Identical body plus an appendix
+  with the full risk-metric discussion, the scale/cardinality confound fix, the
+  activity diagnostics, the observation layout, and reproducibility. Use for arXiv,
+  NOT for ICAIF (ICAIF forbids appendices).
+- `references.bib` — 17 verified references (shared by both), only solidly-verified
+  entries kept.
+
+Both `.tex` files pass the same static checks (env/brace balance; 17 citations, 0
+undefined, 0 orphan).
 
 ## Compiling
 There is **no LaTeX toolchain on this machine** (no `pdflatex`, no `tectonic`, no TeX
