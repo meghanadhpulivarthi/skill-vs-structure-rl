@@ -11,27 +11,46 @@
 - **No supplementary material / appendix.** Everything must fit in the 8 pages.
 - In-person presentation required.
 
-The current draft is ~5–6 pages when compiled, so there is headroom to expand
-(a figure, fuller related work, a per-metric risk table) if desired — 8 is the max,
-not a target.
+## Structure: main body + extended appendix
+`paper.tex` contains BOTH:
+- the **main body** (Intro → Conclusion + references), written to stand alone; and
+- an **extended-version appendix** (`\appendix` onward) with the full RQ1 risk-metric
+  discussion, the scale/cardinality confound fix, the activity diagnostics, the
+  observation layout, and reproducibility detail.
+
+**⚠️ ICAIF forbids appendices/supplementary and caps at 8 pages INCLUDING references.**
+So the appendix is for an **extended (arXiv) version only**. For the ICAIF submission:
+delete everything from the `\appendix` line to `\end{document}`, then confirm the main
+matter is ≤ 8 pages. The main body does not depend on the appendix.
 
 ## Files
-- `paper.tex` — the manuscript (`sigconf,anonymous,review`).
+- `paper.tex` — the manuscript (`sigconf,anonymous,review`), main body + appendix.
 - `references.bib` — 17 verified references (only solidly-verified entries kept).
 
 ## Compiling
-No LaTeX toolchain is installed on this machine, so the paper was **not** compiled
-here (static checks only: environment/brace balance and citation integrity all pass).
+There is **no LaTeX toolchain on this machine** (no `pdflatex`, no `tectonic`, no TeX
+module), and the sandbox blocked me from downloading a TeX engine — so I could **not**
+compile it here. Static checks only: environment/brace balance and citation integrity
+(17 keys, 0 undefined, 0 orphan) all pass. Three ways to build:
 
-**Easiest — Overleaf:** create a project, upload `paper.tex` + `references.bib`,
-set the compiler to pdfLaTeX. `acmart` is built into Overleaf; it builds as-is.
+**1. Overleaf (easiest, no install):** new project → upload `paper.tex` +
+`references.bib` → compiler pdfLaTeX. `acmart` is built in; it builds as-is.
 
-**Local (if you install TeX Live / MacTeX):**
+**2. Locally, self-contained via `tectonic`** — run this yourself (in-session, prefix
+with `!`, or in a terminal); it downloads only what it needs and needs no root:
 ```
-pdflatex paper
-bibtex   paper
-pdflatex paper
-pdflatex paper
+cd /tmp && curl -fsSL \
+  https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz \
+  | tar xz
+cd /dccstor/meghanadhp/projects/Helix/rl-allocation-audit/paper/icaif2026
+/tmp/tectonic paper.tex        # emits paper.pdf (runs bibtex internally)
+```
+If you'd rather I run the compile, add a Bash permission rule allowing the download,
+and I'll build it and report the page count.
+
+**3. TeX Live / MacTeX (if installed):**
+```
+pdflatex paper && bibtex paper && pdflatex paper && pdflatex paper
 ```
 
 ## Anonymization (double-blind)
