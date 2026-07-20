@@ -69,6 +69,8 @@ def project_to_simplex_torch(v: torch.Tensor) -> torch.Tensor:
     """Batched, differentiable Euclidean projection onto the probability simplex
     (Duchi et al. 2008), mirroring src/simplex.project_to_simplex so the tilt->weights
     map can be backpropagated for saliency. v: [B, n] -> [B, n]."""
+    if not torch.isfinite(v).all():
+        raise ValueError("project_to_simplex_torch: non-finite values in input")
     n = v.shape[1]
     u, _ = torch.sort(v, descending=True, dim=1)
     cssv = torch.cumsum(u, dim=1) - 1.0

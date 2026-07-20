@@ -101,3 +101,10 @@ def test_torch_simplex_projection_is_differentiable():
     w = project_to_simplex_torch(v)
     w[:, 3:].sum().backward()          # gradient of safe-weight wrt inputs
     assert v.grad is not None and torch.isfinite(v.grad).all()
+
+
+def test_torch_simplex_projection_rejects_non_finite_input():
+    import pytest
+    bad = torch.tensor([[0.2, float("nan"), 0.1, 0.1, 0.1]])
+    with pytest.raises(ValueError):
+        project_to_simplex_torch(bad)
