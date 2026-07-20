@@ -1,9 +1,10 @@
 %% ICAIF '26 submission — ACM sigconf, double-blind (anonymous).
 %% Compile on Overleaf (acmart is built in) or with: pdflatex -> bibtex -> pdflatex x2.
+%% Needs fig_skill_net.pdf in the same directory.
 %%
 %% ICAIF '26 SUBMISSION VERSION — 8-page HARD limit INCLUDING references, no appendix.
-%% This is the conference cut (no appendix). The extended arXiv version with the full
-%% appendix is paper.tex. Keep this <= 8 pages when compiled.
+%% This is the conference cut (all detail folded into the body; no appendix). The
+%% arXiv-extended version with a separate appendix is paper.tex. Keep this <= 8 pages.
 %% Remove the `anonymous` option for the camera-ready to reveal the author block below.
 \documentclass[sigconf,anonymous,review]{acmart}
 
@@ -119,17 +120,22 @@ market.
 
 \section{Related Work}
 RL allocators span value- and policy-based methods and are increasingly paired with
-interpretability claims \cite{lavko2023,cong2021alphaportfolio,delarica2025}. Recent
-cost- and benchmark-aware replications question whether the RL advantage survives
-realistic frictions and a $1/N$ baseline \cite{kruthof2025,demiguel2009}. Our
+interpretability claims \cite{lavko2023,cong2021alphaportfolio,delarica2025}. The
+promise of tail-risk reduction is prominent in this line, but evaluations often use
+weak baselines and omit turnover costs. A parallel, skeptical thread revisits these
+results under realistic frictions and a strong naive-diversification benchmark, and
+frequently finds the advantage does not survive \cite{kruthof2025,demiguel2009}. Our
 residual formulation borrows residual policy learning from robotics, where a learned
 policy corrects a fixed controller \cite{silver2018,johannink2019}; we repurpose it
-as a measurement instrument, pairing it with a structure-baselined reward and a
-synthetic ground-truth test. On explanation, gradient saliency \cite{simonyan2014}
-and KernelSHAP \cite{lundberg2017} are the standard tools, but saliency maps for
-deep RL have been shown to be exploratory rather than explanatory \cite{atrey2020}.
-We contribute a controlled, causally grounded test of what these tools recover for
-RL allocators specifically.
+as a measurement instrument rather than a performance booster, pairing it with a
+structure-baselined reward and a synthetic ground-truth test that fixes where
+``no skill'' lies. On explanation, gradient saliency \cite{simonyan2014} and
+KernelSHAP \cite{lundberg2017} are the standard post-hoc tools, and interpretable
+RL allocators increasingly report them \cite{cong2021alphaportfolio,delarica2025};
+however, saliency maps for deep RL have been shown to be exploratory rather than
+explanatory \cite{atrey2020}. We contribute a controlled, causally grounded test of
+what these tools recover for RL allocators specifically, adjudicated against
+interventional ground truth where it exists.
 
 \section{Method}
 
@@ -192,25 +198,44 @@ inject volatility shocks and flip the signal as legibility checks. The
 \emph{attribution} track computes gradient saliency \cite{simonyan2014} and
 KernelSHAP \cite{lundberg2017}.
 
-A scale confound must be removed first. The signal feature has $35$--$100\times$ the
-raw scale of the return and volatility features, and raw gradient saliency is
-scale-invariant while ablation and SHAP are scale-sensitive; left unfixed, the
-comparison would be dominated by units and could \emph{falsely} read as unfaithful.
-We therefore express saliency in gradient$\times$standard-deviation units and put all
-four methods on one basis of normalized per-feature shares, computing the causal
-group verdict from per-feature (not joint) ablation. We report per-feature Spearman
-correlation between the causal profile and each attribution profile. Because
-normalized shares always sum to one, they hide an inactive agent; we additionally
-report \emph{activity diagnostics} (the standard deviation of the policy's decision
-over the rollout and the raw, un-normalized causal magnitude per group) and a
-degenerate-agent guard. On synthetic data the leading signal is the known driver; on
-real data no oracle exists, so only \emph{method agreement} is adjudicable.
+Two confounds must be removed before the tracks are comparable. \emph{Scale}: the
+signal feature has $35$--$100\times$ the input scale of the return and volatility
+features, and raw gradient saliency $\lvert\partial g/\partial o_i\rvert$ is
+scale-invariant whereas ablation and SHAP are scale-sensitive, so the three tracks
+otherwise live in different units and a disagreement could \emph{falsely} read as
+unfaithfulness; we place saliency in gradient$\times$standard-deviation units to
+match. \emph{Cardinality}: the return block has many features (100 in the tilt
+observation, 220 in the real gate observation) versus a single signal feature, so
+summed group importance over-weights the large group. We therefore (i) express every
+method as normalized per-feature shares and (ii) compute the causal group verdict
+from per-feature (not joint) ablation, so causal and attribution share one basis.
+Normalization is a monotone rescale and does not by itself cancel a group's
+feature-count advantage; the cardinality-robust statistic we report is the
+per-feature Spearman correlation between the causal profile and each attribution
+profile.
+
+Because normalized shares always sum to one, they hide an inactive agent. We
+therefore also report \emph{activity diagnostics}: the standard deviation of the
+policy's scalar decision over the rollout, and the raw, un-normalized
+$\lvert\text{causal effect}\rvert$ per feature group. If importances collapse to
+zero the probe records a logged ``no measurable mechanism'' null rather than dividing
+by zero. On synthetic data the leading signal is the known driver; on real data no
+oracle exists, so only \emph{method agreement} is adjudicable.
 
 \section{Experiments}
+
+\subsection{Setup}
 The real universe is 11 liquid ETFs spanning equity sectors, Treasuries, gold, and
-international equity (2005--2024, daily, 10\,bps costs). Synthetic runs use 150k
-training steps and five seeds; real robustness sweeps use five agent seeds and ten
-placebo draws per base. All reported figures are held out.
+international equity (2005--2024, daily, 10\,bps costs). The gate observation is
+$[\,\text{window}\times n\ \text{returns}\mid n\ \text{short vol}\mid 1\
+\text{signal}\,]$ (232-dim for the real panel with window 20); the tilt observation
+adds dual-horizon volatility, momentum, and the base weights (121-dim in the 5-asset
+synthetic world). We use PPO with an MLP policy, 150k training steps, and five seeds;
+real robustness sweeps use five agent seeds and ten placebo draws per base. On real
+data the safe sleeve is resolved by ticker (intermediate then long Treasuries), never
+a hardcoded index. Heavy training runs on a CPU batch cluster with thread caps; a GPU
+gives no benefit for this small policy, whose bottleneck is environment stepping. All
+reported figures are held out.
 
 \subsection{The skill measure is valid (RQ-skill, synthetic)}
 Table~\ref{tab:rq2} shows mean skill rising monotonically with signal strength for
@@ -246,17 +271,31 @@ matched null (\S\ref{sec:rq1}).
 
 \subsection{No skill above structure (RQ-skill, real ETFs)}\label{sec:rq1}
 Tables~\ref{tab:rq1gate} and~\ref{tab:rq1tilt} report skill net of the placebo null
-across the three bases, for the gate and the tilt. Every skill-net confidence
-interval lies entirely below zero, the placebo (luck) mean is positive everywhere
-(so netting is essential), and every structureless surrogate beats the real agent
-(placebo exceedance $=1.00$) for all bases and both agents. The gate learns to mostly
-do nothing (mean gate $\approx0.04$), tracking its base on all tail and risk metrics
-while both clearly beat naive $1/N$; the tail benefit over $1/N$ is therefore
-inherited structure, not learned skill. Skill-net is most negative for the weakest base
-(equal-weight), where the gate activates most and churns without edge. The expressive
-tilt loses \emph{more} than the gate ($1.5$--$1.8\times$) in the same base ordering:
-more expressiveness means more churn, and where no timeable structure exists that
-churn is pure cost drag. A capable agent sharpens the verdict rather than rescuing it.
+across the three bases, for the gate and the tilt, and Figure~\ref{fig:skillnet}
+summarizes them. Every skill-net confidence interval lies entirely below zero, the
+placebo (luck) mean is positive everywhere (so netting is essential), and every
+structureless surrogate beats the real agent (placebo exceedance $=1.00$) for all
+bases and both agents. The gate learns to mostly do nothing (mean gate $\approx0.04$),
+tracking its base on every reported tail and risk metric---expected shortfall,
+maximum drawdown, tail ratio, skewness, Sharpe, and Sortino---while both the agent and
+its base clearly beat naive $1/N$ on the downside. The agent-versus-base differences
+are within noise, so the tail benefit over $1/N$ is inherited structure (risk-parity /
+de-risking geometry), not learned skill: the agent does not improve on the base it
+starts from. Skill-net is most negative for the weakest base (equal-weight), where the
+gate activates most and churns without edge. The expressive tilt loses \emph{more}
+than the gate ($1.5$--$1.8\times$) in the same base ordering: more expressiveness
+means more churn, and where no timeable structure exists that churn is pure cost drag.
+A capable agent sharpens the verdict rather than rescuing it.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_skill_net}
+  \caption{Skill net of the placebo null on real ETFs, by structural base. Bars lie
+  below zero for every base and both agents (gate error bars are 95\% CIs); the
+  expressive tilt is strictly worse than the gate. Placebo exceedance is $1.00$
+  throughout.}
+  \label{fig:skillnet}
+\end{figure}
 
 \begin{table}[t]
   \caption{Real ETFs, \emph{gate}: skill net of the placebo null (5 agent seeds, 10
@@ -300,12 +339,11 @@ per-feature agreement with the causal profile is positive for both.
 On the synthetic expressive tilt, saliency is near-perfectly aligned with the causal
 profile ($+0.999$) while SHAP over-credits the salient, high-variance signal feature
 ($+0.88$), naming it the top group in four of five seeds when the causal analysis
-does not; this inverts which method is more reliable relative to the gate. A
-methodological caveat appears here: with wildly unequal group cardinalities (100
-return features vs.\ 1 signal), group-level ``top driver'' verdicts are
-cardinality-confounded---per feature the signal is the strongest single feature
-($\sim54\times$ an average return feature)---so the per-feature Spearman is the robust
-measure.
+does not; this inverts which method is more reliable relative to the gate. The
+cardinality caveat bites here: with 100 return features versus 1 signal, the
+group-level ``top driver'' verdict is confounded---per feature the signal is actually
+the strongest single feature ($\sim54\times$ an average return feature)---so the
+per-feature Spearman is the honest measure.
 
 On the real agent there is no ground truth, so we report method agreement only. The
 activity diagnostic overturns a natural prior: although the mean gate is
@@ -314,11 +352,13 @@ the gate rather than sitting still. It has a real, if unprofitable, decision
 mechanism (none of five seeds degenerate). Given that live mechanism, per-feature
 agreement with causal ablation is strong---saliency $+0.996$, SHAP $+0.79$---
 preserving the saliency-over-SHAP ordering seen synthetically. All four methods
-attribute about $0.96$ of the normalized share to the recent-returns block, with the
-crisis signal a minor contributor; unlike the synthetic tilt this is not a
-cardinality artifact, since the signal is only about three times an average return
-feature. The real allocator has a coherent, faithfully readable decision rule; the
-rule simply is not skillful.
+attribute about $0.96$ of the normalized share to the recent-returns block (causal
+freeze $0.963$, permute $0.961$; saliency $0.962$; SHAP $0.922$), with the crisis
+signal a minor contributor; SHAP again shifts slightly more mass onto the signal
+($0.05$ vs.\ causal $0.014$), the same salience bias. Unlike the synthetic tilt this
+is not a cardinality artifact, since the signal is only about three times an average
+return feature. The real allocator has a coherent, faithfully readable decision rule;
+the rule simply is not skillful.
 
 \begin{table}[t]
   \caption{Faithfulness probe: per-feature Spearman between the causal profile and
@@ -343,7 +383,12 @@ finds none on real markets net of luck (both agents, three bases), and shows the
 trained policy's mechanism is largely readable by post-hoc attribution, with saliency
 tracking the causal per-feature profile more tightly than SHAP across all three
 agents. The recurring practical failure mode is SHAP over-crediting a salient,
-high-variance feature; which tool to trust is agent-dependent.
+high-variance feature; which tool to trust is agent-dependent, so an interpretability
+report for an RL allocator should cross-check attribution against a cheap causal
+ablation rather than trust a single method. The real-agent result is a useful
+corrective on its own: a low mean action can hide an active decision rule, and only
+an absolute-magnitude diagnostic---not a normalized share---reveals whether there is a
+mechanism to explain at all.
 
 Several limitations bound these claims. The synthetic market is deliberately simple,
 chosen so that ``no skill'' is well defined rather than realistic. The real study uses

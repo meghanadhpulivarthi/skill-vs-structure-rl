@@ -24,10 +24,13 @@ delete everything from the `\appendix` line to `\end{document}`, then confirm th
 matter is ≤ 8 pages. The main body does not depend on the appendix.
 
 ## Files
-- **`paper_icaif.tex` — the ICAIF submission cut.** Main body only, no appendix,
-  no cross-references into an appendix. This is the file to submit. Estimated ~5
-  pages compiled (I could not compile here; see below), i.e. safely under the
-  8-page cap with headroom to expand if you want a fuller submission.
+- **`paper_icaif.tex` — the ICAIF submission cut.** Self-contained: all the
+  appendix detail (scale/cardinality confound fix, activity diagnostics, obs layout,
+  reproducibility, risk metrics) folded into the body, plus a results figure
+  (`fig_skill_net.pdf`). No appendix. This is the file to submit. Estimated ~7 pages
+  compiled (I could not compile here; see below), i.e. under the 8-page cap.
+- **`fig_skill_net.pdf`** — RQ1 skill-net-by-base figure, generated from the recorded
+  results (regenerate via the snippet in the git history if needed).
 - **`paper.tex` — the extended (arXiv) version.** Identical body plus an appendix
   with the full risk-metric discussion, the scale/cardinality confound fix, the
   activity diagnostics, the observation layout, and reproducibility. Use for arXiv,
