@@ -2,6 +2,57 @@
 
 Choices made and why. Newest first.
 
+## 2026-07-20 — RQ3 REAL-DATA VERDICT: the real agent has a real (unprofitable) mechanism, and attribution agrees strongly with causal — the do-nothing prior was WRONG
+
+**Result (LSF job 1131791, 5 gate agents on the full real ETF panel, RQ1's risk_parity headline
+config; safe sleeve = IEF @ col 3 of 11; `src/rq3_faithfulness.py::run_real_experiment`;
+outputs/2026-07-20_08-00-24_rq3-faithfulness-real/; ~16 min, 1 GB).**
+
+**The "do-nothing agent → null probe" prediction was WRONG, and the activity diagnostic I added
+is what caught it.** I expected a degenerate/null result because RQ1's mean gate ≈ 0.04 reads as
+"stays on the base." But the diagnostic shows gate **mean ≈ 0.052 with std ≈ 0.18**: the agent
+does NOT sit still — it SWINGS the gate hard around a low mean (periodically de-risking toward the
+safe sleeve, then returning to base). **0/5 seeds degenerate.** So there is a genuine, active,
+probeable decision mechanism; it is simply an UNPROFITABLE one (RQ1: no skill above structure net
+of costs). The honest story is not "no mechanism to explain" but "a real, explainable mechanism
+that happens not to pay." Had I trusted the mean-gate prior and skipped the raw-magnitude
+diagnostic, I would have mischaracterized the agent — this is why normalized shares (which always
+sum to 1) are insufficient and the absolute gate_std / raw |causal effect| were added.
+
+**No ground truth → METHOD AGREEMENT, not faithfulness.** On real ETFs the `signal` is a causal
+no-lookahead crisis-vol heuristic, not a known driver, so we can only ask whether the tracks agree
+(causal ablation ↔ saliency/SHAP, and with each other) — a transfer/robustness check on the
+synthetic findings, not a truth verdict. Framed that way throughout.
+
+**Method agreement is strong and preserves the synthetic ordering.** Per-feature Spearman (causal
+vs attribution): **saliency +0.996 ± 0.001** (near-perfect), **SHAP +0.79 ± 0.04** (freeze≈permute).
+Saliency tracks the causal per-feature profile far more tightly than SHAP — the SAME saliency>SHAP
+ordering seen in both synthetic probes (gate 0.79/0.61; tilt 0.999/0.88). So that structure is NOT
+a synthetic artifact; it holds on the real agent. Because causal ablation is the most direct read
+of what the agent responds to, saliency↔causal ≈ +1.0 is meaningful evidence saliency reads the
+real mechanism (even though, strictly, high agreement without an oracle can't rule out both being
+wrong together).
+
+**What drives the real agent: the recent-RETURNS block, not the crisis signal.** All four methods
+put ~0.96 of the (per-feature-normalized) group share on `returns` (causal freeze 0.963 / permute
+0.961; saliency 0.962; SHAP 0.922), with `signal` a minor contributor (causal 0.014; SHAP 0.05 —
+the same mild SHAP salience-over-crediting, small here). Causal ranks `returns` top in 5/5 seeds.
+**Crucially, unlike synthetic tilt this is NOT just a cardinality artifact:** per single feature
+the signal's causal share (0.014) is only ~3× an average return feature (0.963/220 ≈ 0.0044),
+versus ~54× on synthetic tilt. The real agent genuinely spreads its de-risking across the broad
+return pattern rather than concentrating on the crisis-vol signal. SHAP again over-credits the
+salient signal slightly (0.05 vs causal 0.014), consistent with its recurring failure mode.
+
+**Verdict on H3 (real):** the synthetic method-agreement structure transfers to the real agent —
+attribution (especially saliency) agrees strongly with the causal mechanism, and all methods agree
+the agent reads the return block. This is a stronger, more useful result than the predicted null:
+it says the real RL allocator has a coherent, attributable decision rule that is faithfully read by
+post-hoc explanation — the rule just isn't skillful. **Caveats:** no ground truth (agreement, not
+faithfulness); in-sample rollout (mechanism probe, not generalization — RQ1 settled that); seeds
+vary PPO training only (single real history); per-feature causal vectors not persisted (a paper
+re-run should save the 232-dim vectors, same recommendation as tilt). Design/plan:
+`docs/design_2026-07-20_rq3-real-faithfulness.md`, `docs/plans/2026-07-20_plan6-rq3-real.md`.
+
 ## 2026-07-20 — RQ3 TILT-AGENT VERDICT: attribution stays faithful per-feature; SHAP over-credits the salient signal; group-premise is cardinality-confounded
 
 **Result (LSF job 1130878, 5 tilt agents @ signal 0.95 on multi_regime; safe-block-weight object;

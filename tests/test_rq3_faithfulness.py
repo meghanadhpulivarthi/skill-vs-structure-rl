@@ -125,6 +125,88 @@ def test_run_probe_on_tilt_groups_identifies_signal_driver():
     assert set(verdict) == {"causal", "attribution", "spearman", "top_group"}
 
 
+from src.rq3_faithfulness import _activity_diagnostics, _probe_or_null
+
+
+def test_activity_diagnostics_flags_an_inactive_agent():
+    # A constant gate does nothing: zero gate variance and zero causal magnitude for every
+    # group. This is exactly the near-inactive real-agent regime (RQ1 mean gate ~0.04) the
+    # diagnostic must make VISIBLE — normalized group-shares always sum to 1 and would hide it.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return np.full(len(obs), 0.3)
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(150, 43)).astype(np.float32)
+    groups = feature_groups(window=20, n_assets=2)
+    diag = _activity_diagnostics(gate_fn, obs, groups, seed=0)
+
+    assert diag["gate_std"] == 0.0
+    assert abs(diag["gate_mean"] - 0.3) < 1e-6
+    for group_name, magnitude in diag["causal_magnitude"].items():
+        assert magnitude == 0.0, f"{group_name} must have zero causal magnitude for a constant gate"
+
+
+def test_activity_diagnostics_localizes_a_real_driver():
+    # A gate driven only by the signal feature: the raw (un-normalized) causal magnitude must
+    # be largest for the `signal` group. Confirms the diagnostic reports absolute effect SIZE,
+    # not a share that always sums to 1.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return 1.0 / (1.0 + np.exp(-4.0 * obs[:, 42]))
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(200, 43)).astype(np.float32)
+    groups = feature_groups(window=20, n_assets=2)
+    diag = _activity_diagnostics(gate_fn, obs, groups, seed=0)
+
+    assert diag["causal_magnitude"]["signal"] > diag["causal_magnitude"]["returns"]
+    assert diag["causal_magnitude"]["signal"] > diag["causal_magnitude"]["short_vol"]
+    assert diag["gate_std"] > 0.0
+
+
+def test_probe_or_null_records_degenerate_agent_without_crashing():
+    # A constant agent yields zero saliency and zero causal effect, so normalized group-shares
+    # are undefined (sum to zero). _probe_or_null must catch that and record a degenerate null
+    # rather than raising — the honest 'no measurable mechanism' path for a near-inactive agent.
+    # gate_mean_fn stays graph-connected (real policies do) but has zero gradient, matching the
+    # real degenerate mode (zero-but-connected grads), not a disconnected-tensor error.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return np.full(len(obs), 0.3)
+
+    def gate_mean_fn(obs_tensor):
+        return obs_tensor[:, 42] * 0.0 + 0.3
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(80, 43)).astype(np.float32)
+    groups = feature_groups(window=20, n_assets=2)
+    verdict = _probe_or_null(gate_fn, gate_mean_fn, obs, groups, seed=0)
+
+    assert verdict["degenerate"] is True
+    assert "reason" in verdict
+
+
+def test_probe_or_null_passes_through_a_live_verdict():
+    # A signal-driven agent is non-degenerate: _probe_or_null returns the full verdict with
+    # degenerate=False and the verdict shape intact.
+    def gate_fn(observations):
+        obs = np.atleast_2d(np.asarray(observations, dtype=np.float32))
+        return 1.0 / (1.0 + np.exp(-4.0 * obs[:, 42]))
+
+    def gate_mean_fn(obs_tensor):
+        return torch.sigmoid(4.0 * obs_tensor[:, 42])
+
+    rng = np.random.default_rng(0)
+    obs = rng.normal(scale=0.3, size=(200, 43)).astype(np.float32)
+    groups = feature_groups(window=20, n_assets=2)
+    verdict = _probe_or_null(gate_fn, gate_mean_fn, obs, groups, seed=0)
+
+    assert verdict["degenerate"] is False
+    assert verdict["top_group"]["causal_freeze"] == "signal"
+    assert {"causal", "attribution", "spearman", "top_group", "degenerate"} <= set(verdict)
+
+
 def test_vol_shock_response_returns_aligned_gate_trajectories():
     from src.synthetic_market import generate_risky_safe_market
     from src.interventions import make_gate_fn

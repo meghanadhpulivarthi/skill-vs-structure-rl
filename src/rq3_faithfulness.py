@@ -105,6 +105,35 @@ def run_probe(gate_fn, gate_mean_fn, observations, groups, seed: int = 0) -> dic
             "spearman": spearman, "top_group": top_group}
 
 
+def _activity_diagnostics(gate_fn, observations, groups: dict, seed: int = 0) -> dict:
+    """Absolute-magnitude view of how much the agent actually ACTS, so a near-inactive real
+    agent (RQ1 mean gate ~0.04) is VISIBLE. The normalized group-shares in run_probe always
+    sum to 1 — they look identical for a real mechanism and for pure noise. This reports the
+    gate mean/std over the rollout and the raw (un-normalized) |freeze causal effect| per
+    group; if gate_std and every causal magnitude are ~0 the agent barely acts and any
+    method-agreement number is attribution of noise."""
+    observations = np.asarray(observations, dtype=np.float32)
+    gate = np.asarray(gate_fn(observations), dtype=float)
+    causal_magnitude = {name: causal_effect(gate_fn, observations, indices, "freeze", seed=seed)
+                        for name, indices in groups.items()}
+    return {"gate_mean": float(gate.mean()), "gate_std": float(gate.std()),
+            "causal_magnitude": causal_magnitude}
+
+
+def _probe_or_null(gate_fn, gate_mean_fn, observations, groups: dict, seed: int = 0) -> dict:
+    """run_probe, but if importances collapse to zero (a constant / inactive agent, which
+    makes the normalized group-shares undefined) record a LOGGED degenerate null instead of
+    crashing. This is the honest 'no measurable mechanism' path for the real agent."""
+    try:
+        verdict = run_probe(gate_fn, gate_mean_fn, observations, groups, seed=seed)
+    except ValueError as exc:
+        # Expected, documented case: a near-inactive agent has ~zero causal/attribution
+        # importance, so per-feature shares cannot be formed. Surface it loudly and record it.
+        print(f"_probe_or_null: degenerate agent (no measurable mechanism): {exc}", flush=True)
+        return {"degenerate": True, "reason": str(exc)}
+    return {**verdict, "degenerate": False}
+
+
 def _summarize_across_seeds(per_seed: list) -> dict:
     """Across-seed faithfulness summary shared by the gate and tilt experiments: fraction of
     seeds where each method ranks `signal` top (premise from the causal track), plus mean/std
@@ -248,6 +277,124 @@ def run_tilt_experiment(config: dict, n_seeds: int) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "config.json", "w") as f:
         json.dump({"config": config, "n_seeds": n_seeds}, f, indent=2)
+    with open(out_dir / "results.json", "w") as f:
+        json.dump({"summary": summary, "per_seed": per_seed}, f, indent=2)
+    print(f"Summary: {summary}")
+    print(f"Saved run to: {out_dir}")
+    return {"summary": summary, "per_seed": per_seed, "out_dir": str(out_dir)}
+
+
+# --- Real-data probe (no ground truth; method-agreement + activity diagnostics) ---
+# RQ1's headline config (risk_parity base, full real panel). safe_asset_index and n_assets
+# are resolved at runtime from the loaded panel (columns are alphabetical — never hardcode).
+REAL_CONFIG = {"base_name": "risk_parity", "window": 20, "cost_bps": 10.0,
+               "total_timesteps": 150_000}
+
+
+def _summarize_real_across_seeds(per_seed: list) -> dict:
+    """Real-data summary. There is NO ground-truth 'signal is the true driver' premise on real
+    data, so this reports METHOD AGREEMENT (per-feature causal-vs-attribution Spearman) over the
+    non-degenerate seeds, the fraction of seeds with no measurable mechanism, and the activity
+    diagnostics that tell the reader whether the agreement reflects a real mechanism or noise."""
+    n = len(per_seed)
+    live = [v for v in per_seed if not v["degenerate"]]
+    degenerate_fraction = float(np.mean([v["degenerate"] for v in per_seed]))
+
+    spearman_mean, spearman_std = {}, {}
+    if live:
+        keys = live[0]["spearman"].keys()
+        spearman_mean = {k: float(np.mean([v["spearman"][k] for v in live])) for k in keys}
+        spearman_std = {k: float(np.std([v["spearman"][k] for v in live])) for k in keys}
+
+    diags = [v["diagnostics"] for v in per_seed]   # every seed carries diagnostics, degenerate or not
+    group_names = list(diags[0]["causal_magnitude"].keys())
+    diagnostics = {
+        "gate_mean": float(np.mean([d["gate_mean"] for d in diags])),
+        "gate_std_mean": float(np.mean([d["gate_std"] for d in diags])),
+        "causal_magnitude_mean": {g: float(np.mean([d["causal_magnitude"][g] for d in diags]))
+                                  for g in group_names},
+    }
+    # Descriptive only (no truth to score against): which group each live seed's causal track ranks top.
+    causal_top_group_by_seed = [v["top_group"]["causal_freeze"] for v in live]
+
+    return {
+        "n_seeds": n,
+        "degenerate_fraction": degenerate_fraction,
+        "spearman_mean": spearman_mean,
+        "spearman_std": spearman_std,
+        "diagnostics": diagnostics,
+        "causal_top_group_by_seed": causal_top_group_by_seed,
+        "caveats": [
+            "no ground truth on real data: the `signal` feature is a causal no-lookahead crisis "
+            "heuristic, not the known driver, so only METHOD AGREEMENT (causal vs attribution) is "
+            "adjudicable here — not faithfulness against truth.",
+            "in-sample rollout: the agent is probed on the series it trained on because this "
+            "attributes the DECISION MECHANISM (not out-of-sample skill, which RQ1 already settled).",
+            "read the Spearman agreement TOGETHER with `diagnostics`: if gate_std and the raw "
+            "causal_magnitude are ~0 the agent barely acts, so any agreement is attribution of noise.",
+            "seeds vary PPO training only (real data is a single history), unlike the synthetic "
+            "probes which draw independent train/eval markets per seed.",
+        ],
+    }
+
+
+def run_real_experiment(config: dict, n_seeds: int) -> dict:
+    """Probe the REAL-DATA gate agent's decision mechanism. No ground truth exists on real data,
+    so this measures METHOD AGREEMENT (causal vs SHAP/saliency) reported alongside activity
+    diagnostics. See docs/design_2026-07-20_rq3-real-faithfulness.md."""
+    from src.train import train_agent
+    from src.data import load_etf_panel
+    from src.real_market import build_real_market
+
+    now = datetime.datetime.now()
+    print("=" * 60)
+    print(f"Run started : {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Script      : {__file__} (real)")
+    print(f"Config      : {config} | n_seeds={n_seeds}")
+    print("=" * 60)
+
+    panel = load_etf_panel()
+    returns = panel["returns"]
+    tickers = panel["tickers"]
+    print(f"run_real_experiment: loaded real panel {returns.shape} tickers={tickers}")
+
+    # Resolve the safe sleeve by NAME (yfinance columns are alphabetical — never hardcode the
+    # index), matching src/rq1_real_data.py.__main__. Fail loud if no Treasury sleeve survived.
+    if "IEF" in tickers:
+        safe_ticker = "IEF"
+    elif "TLT" in tickers:
+        safe_ticker = "TLT"
+    else:
+        raise ValueError(f"no Treasury safe sleeve (IEF/TLT) in panel tickers {tickers}")
+    safe_asset_index = tickers.index(safe_ticker)
+    n_assets = returns.shape[1]
+    print(f"run_real_experiment: safe sleeve = {safe_ticker} at column {safe_asset_index}, n_assets={n_assets}")
+
+    market = build_real_market(returns, safe_asset_index, window=config["window"])
+    groups = feature_groups(config["window"], n_assets)
+
+    per_seed = []
+    for seed in range(n_seeds):
+        seed_config = {**config, "seed": seed, "safe_asset_index": safe_asset_index}
+        model = train_agent(market, seed_config)
+        observations = rollout_observations(model, market, seed_config)
+        gate_fn = make_gate_fn(model)
+        gate_mean_fn = make_gate_mean_fn(model)
+        verdict = _probe_or_null(gate_fn, gate_mean_fn, observations, groups, seed=seed)
+        verdict["diagnostics"] = _activity_diagnostics(gate_fn, observations, groups, seed=seed)
+        diag = verdict["diagnostics"]
+        mags = {k: round(v, 5) for k, v in diag["causal_magnitude"].items()}
+        print(f"seed={seed}: degenerate={verdict['degenerate']} gate_mean={diag['gate_mean']:.4f} "
+              f"gate_std={diag['gate_std']:.4f} causal_mag={mags}", flush=True)
+        per_seed.append(verdict)
+
+    summary = _summarize_real_across_seeds(per_seed)
+    out_dir = (Path(__file__).resolve().parent.parent / "outputs"
+               / f"{now.strftime('%Y-%m-%d_%H-%M-%S')}_rq3-faithfulness-real")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "config.json", "w") as f:
+        json.dump({"config": config, "n_seeds": n_seeds, "safe_ticker": safe_ticker,
+                   "safe_asset_index": safe_asset_index, "n_assets": n_assets}, f, indent=2)
     with open(out_dir / "results.json", "w") as f:
         json.dump({"summary": summary, "per_seed": per_seed}, f, indent=2)
     print(f"Summary: {summary}")
